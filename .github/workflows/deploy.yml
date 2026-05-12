@@ -33,6 +33,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_INDEXER }}
+          tags: |
+            type=raw,value=latest
+            type=ref,event=branch
 
       - name: Build and push Indexer image
         uses: docker/build-push-action@v5
@@ -47,6 +50,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MCP }}
+          tags: |
+            type=raw,value=latest
+            type=ref,event=branch
 
       - name: Build and push MCP Server image
         uses: docker/build-push-action@v5
