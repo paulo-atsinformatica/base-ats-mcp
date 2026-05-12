@@ -110,4 +110,9 @@ class FalkorDBRepository:
             return res.result_set[0][0]
         return None
 
+    def list_all_document_paths(self) -> list[str]:
+        query = "MATCH (d:Document) RETURN d.path"
+        res = self.graph.query(query)
+        return [row[0] for row in res.result_set] if res.result_set else []
+
 repo = FalkorDBRepository()

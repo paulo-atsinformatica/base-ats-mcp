@@ -118,6 +118,22 @@ def process_file(file_path: Path):
             logger.error("file_processing_failed", path=rel_path, error=str(e))
 
 
+def cleanup_deleted_files():
+    """Remove do banco documentos que não existem mais no diretório da wiki."""
+    with tracer.start_as_current_span("cleanup_deleted_files"):
+        logger.info("starting_cleanup")
+        db_paths = repo.list_all_document_paths()
+        deleted_count = 0
+        
+        for path_str in db_paths:
+            full_path = settings.WIKI_PATH / path_str
+            if not full_path.exists():
+                logger.info("deleting_removed_file", path=path_str)
+                repo.delete_document(path_str)
+                deleted_count += 1
+        
+        logger.info("cleanup_done", removed=deleted_count)
+
 def run_sync():
     logger.info("sync_started", wiki_path=settings.WIKI_PATH)
     wiki_dir = Path(settings.WIKI_PATH)
@@ -127,10 +143,10 @@ def run_sync():
         return {"status": "error", "reason": "wiki path not found"}
 
     processed = 0
-    skipped = 0
     errors = 0
 
-    for md_file in sorted(wiki_dir.rglob("*.md")):
+    files = list(wiki_dir.rglob("*.md"))
+    for md_file in files:
         if md_file.name in ("index.md", "log.md"):
             continue
         try:
@@ -141,6 +157,8 @@ def run_sync():
         except Exception as e:
             logger.error("unexpected_error", file=str(md_file), error=str(e))
             errors += 1
+            
+    cleanup_deleted_files()
 
     summary = {"status": "ok", "processed": processed, "errors": errors}
     logger.info("sync_finished", **summary)
