@@ -1,8 +1,20 @@
 from falkordb import FalkorDB
+import math
+
 from .config import settings
 from .telemetry import tracer
 from .logger import logger
-import json
+
+
+def _vecf32_literal(values: list) -> str:
+    safe_values = []
+    for value in values:
+        number = float(value)
+        if not math.isfinite(number):
+            raise ValueError("Embedding contains non-finite value")
+        safe_values.append(repr(number))
+    return f"vecf32([{', '.join(safe_values)}])"
+
 
 class FalkorDBRepository:
     def __init__(self):
@@ -11,13 +23,10 @@ class FalkorDBRepository:
         self._ensure_indexes()
 
     def _ensure_indexes(self):
-        # Tenta criar o índice vetorial — sintaxe varia por versão do FalkorDB.
-        # Falha silenciosa: o serviço funciona sem índice (buscas por scan).
         strategies = [
-            # FalkorDB >= 4.x
+            "CREATE VECTOR INDEX FOR (c:Chunk) ON (c.embedding) "
+            "OPTIONS {dimension: 3072, similarityFunction: 'cosine'}",
             "CALL db.idx.vector.createNodeIndex('Chunk', 'embedding', 3072, 'cosine')",
-            # Sintaxe alternativa de versões mais recentes
-            "CREATE VECTOR INDEX FOR (c:Chunk) ON (c.embedding) OPTIONS {dimension: 3072, similarityFunction: 'cosine'}",
         ]
         for stmt in strategies:
             try:
@@ -29,16 +38,13 @@ class FalkorDBRepository:
                 if "already exists" in err or "Index already exists" in err:
                     logger.debug("vector_index_exists")
                     return
-                # Tenta próxima sintaxe
                 logger.debug("vector_index_syntax_failed", error=err)
-        logger.warning("vector_index_not_created", reason="no supported syntax found — scans will be used")
+        logger.warning("vector_index_not_created", reason="no supported syntax found; scans will be used")
 
     def save_document(self, doc_data: dict, chunks: list, embeddings: list):
         with tracer.start_as_current_span("falkordb_save_document"):
-            # 1. Clean up old data for this path
-            self.delete_document(doc_data['path'])
-            
-            # 2. Create Document node
+            self.delete_document(doc_data["path"])
+
             query = """
             MERGE (d:Document {id: $id})
             SET d.path = $path,
@@ -51,10 +57,10 @@ class FalkorDBRepository:
                 d.raw_content = $raw_content
             """
             self.graph.query(query, doc_data)
-            
-            # 3. Create Chunks and relate to Document
+
             for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
                 chunk_id = f"{doc_data['id']}#chunk_{i}"
+                embedding_literal = _vecf32_literal(emb)
                 chunk_query = """
                 MATCH (d:Document {id: $doc_id})
                 CREATE (c:Chunk {
@@ -62,36 +68,36 @@ class FalkorDBRepository:
                     heading: $heading,
                     content: $content,
                     position: $pos,
-                    embedding: $emb
+                    embedding: __EMBEDDING__
                 })
                 CREATE (d)-[:HAS_CHUNK]->(c)
-                """
-                self.graph.query(chunk_query, {
-                    "doc_id": doc_data['id'],
-                    "chunk_id": chunk_id,
-                    "heading": chunk['heading'],
-                    "content": chunk['content'],
-                    "pos": i,
-                    "emb": emb
-                })
-                
-            # 4. Handle Tags
-            for tag_name in doc_data.get('tags', []):
+                """.replace("__EMBEDDING__", embedding_literal)
+                self.graph.query(
+                    chunk_query,
+                    {
+                        "doc_id": doc_data["id"],
+                        "chunk_id": chunk_id,
+                        "heading": chunk["heading"],
+                        "content": chunk["content"],
+                        "pos": i,
+                    },
+                )
+
+            for tag_name in doc_data.get("tags", []):
                 tag_query = """
                 MATCH (d:Document {id: $doc_id})
                 MERGE (t:Tag {name: $tag_name})
                 MERGE (d)-[:HAS_TAG]->(t)
                 """
-                self.graph.query(tag_query, {"doc_id": doc_data['id'], "tag_name": tag_name})
-                
-            # 5. Handle Modules
-            for module_slug in doc_data.get('modulos', []):
+                self.graph.query(tag_query, {"doc_id": doc_data["id"], "tag_name": tag_name})
+
+            for module_slug in doc_data.get("modulos", []):
                 mod_query = """
                 MATCH (d:Document {id: $doc_id})
                 MERGE (m:Module {slug: $mod_slug})
                 MERGE (d)-[:BELONGS_TO_MODULE]->(m)
                 """
-                self.graph.query(mod_query, {"doc_id": doc_data['id'], "mod_slug": module_slug})
+                self.graph.query(mod_query, {"doc_id": doc_data["id"], "mod_slug": module_slug})
 
     def delete_document(self, path: str):
         with tracer.start_as_current_span("falkordb_delete_document"):
@@ -114,5 +120,6 @@ class FalkorDBRepository:
         query = "MATCH (d:Document) RETURN d.path"
         res = self.graph.query(query)
         return [row[0] for row in res.result_set] if res.result_set else []
+
 
 repo = FalkorDBRepository()

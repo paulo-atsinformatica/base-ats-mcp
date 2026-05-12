@@ -64,7 +64,8 @@ def git_pull():
 # ─────────────────────────────────────────────
 
 def process_file(file_path: Path):
-    rel_path = str(file_path.relative_to(settings.WIKI_PATH))
+    wiki_dir = Path(settings.WIKI_PATH)
+    rel_path = str(file_path.relative_to(wiki_dir))
     with tracer.start_as_current_span("process_file", attributes={"file.path": rel_path}):
         try:
             content = file_path.read_text(encoding="utf-8")
@@ -125,8 +126,9 @@ def cleanup_deleted_files():
         db_paths = repo.list_all_document_paths()
         deleted_count = 0
         
+        wiki_dir = Path(settings.WIKI_PATH)
         for path_str in db_paths:
-            full_path = settings.WIKI_PATH / path_str
+            full_path = wiki_dir / path_str
             if not full_path.exists():
                 logger.info("deleting_removed_file", path=path_str)
                 repo.delete_document(path_str)

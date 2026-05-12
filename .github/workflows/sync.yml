@@ -13,8 +13,8 @@ jobs:
     steps:
       - name: Trigger Indexer via MCP Server
         run: |
-          curl -X POST "${{ secrets.MCP_SERVER_URL }}/sync" \
-            -H "X-Admin-Token: ${{ secrets.ADMIN_TOKEN }}" \
+          curl -X POST "${{ secrets.MCP_SERVER_URL }}/api/admin/sync" \
+            -H "X-API-Key: ${{ secrets.ADMIN_TOKEN }}" \
             -H "Content-Type: application/json" \
             --fail \
             --retry 3 \

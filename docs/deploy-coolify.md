@@ -1,97 +1,60 @@
-# Deploy no Coolify — ERP KB FalkorDB
+# Deploy no Coolify - ERP KB FalkorDB
 
-## Pré-requisitos
+## Pre-requisitos
 
-- VPS com **Coolify** instalado
-- Domínio ou IP apontado para a VPS
-- Porta `8000` liberada no firewall (ou use o proxy reverso do Coolify)
+- VPS com Coolify instalado.
+- Dominio ou URL publica apontando para o servico MCP.
+- Variaveis de ambiente configuradas no Coolify.
+- Chave Google AI Studio em `GOOGLE_API_KEY`.
 
----
+## Variaveis de ambiente
 
-## Passo 1 — Criar o Repositório GitHub
-
-1. Crie um novo repositório no GitHub (ex: `ats-erp-kb`).
-2. Copie o conteúdo de `erp-kb-falkordb/` para a raiz do repositório.
-3. Crie a pasta `wiki/` na raiz e adicione seus arquivos Markdown.
-4. Estrutura esperada:
-   ```
-   /
-   ├── docker-compose.yml
-   ├── .env.example
-   ├── indexer/
-   ├── mcp_server/
-   ├── wiki/          ← arquivos .md da base de conhecimento
-   └── .github/
-       └── workflows/
-           └── sync.yml
-   ```
-
----
-
-## Passo 2 — Configurar Secrets no GitHub
-
-No repositório GitHub: **Settings → Secrets and variables → Actions**
-
-| Secret | Valor |
-|---|---|
-| `MCP_SERVER_URL` | URL pública do seu MCP Server (ex: `https://erp-kb.seudominio.com.br`) |
-| `ADMIN_TOKEN` | Mesmo valor definido no `.env` do Coolify |
-
----
-
-## Passo 3 — Criar o Serviço no Coolify
-
-1. Acesse o painel do Coolify.
-2. Clique em **New Resource → Docker Compose**.
-3. Aponte para o seu repositório GitHub.
-4. Coolify vai detectar o `docker-compose.yml` automaticamente.
-
----
-
-## Passo 4 — Configurar as Variáveis de Ambiente
-
-No painel do serviço Coolify, vá em **Environment Variables** e adicione:
+Configure no Coolify:
 
 ```env
 GITHUB_REPO_URL=https://github.com/seu-usuario/seu-repo.git
 GITHUB_TOKEN=seu_github_personal_access_token
+
 MCP_PORT=8000
 ADMIN_TOKEN=uma_senha_segura_e_longa
+
+GOOGLE_API_KEY=sua_chave_google_ai_studio
+EMBEDDING_MODEL=models/gemini-embedding-2
+
 FALKORDB_HOST=falkordb
 FALKORDB_PORT=6379
-EMBEDDING_MODEL=all-MiniLM-L6-v2
-OTEL_EXPORTER_OTLP_ENDPOINT=  # Deixe vazio se não tiver OTEL
+
+OTEL_EXPORTER_OTLP_ENDPOINT=
 ```
 
----
+## Deploy
 
-## Passo 5 — Configurar Volume Persistente
+1. Crie um recurso Docker Compose no Coolify apontando para este repositorio.
+2. Confirme que o volume nomeado `falkordb_data` esta persistente em `/data`.
+3. Faca deploy.
+4. Verifique o health check:
 
-Para que os dados do FalkorDB sobrevivam a reinicializações, o Coolify deve mapear o volume:
+```bash
+curl https://erp-kb.seudominio.com.br/health
+```
 
-- **Volume name:** `falkordb_data`
-- **Mount path:** `/data`
-- **Service:** `falkordb`
+Resposta esperada:
 
-> O Coolify cria volumes nomeados automaticamente ao ler o `docker-compose.yml`. Confirme na aba **Volumes** do serviço.
+```json
+{"status":"ok","database":true}
+```
 
----
+## Primeira indexacao manual
 
-## Passo 6 — Deploy
+Use o endpoint atual:
 
-1. Clique em **Deploy** no Coolify.
-2. Acompanhe os logs de build em tempo real.
-3. Após subir, verifique o health check:
-   ```bash
-   curl https://erp-kb.seudominio.com.br/health
-   # Esperado: {"status": "ok", "database": true}
-   ```
+```bash
+curl -X POST https://erp-kb.seudominio.com.br/api/admin/sync \
+  -H "X-API-Key: sua_senha_admin" \
+  -H "Content-Type: application/json"
+```
 
----
-
-## Passo 7 — Primeira Indexação Manual
-
-Após o deploy, acione a indexação inicial:
+O alias legado tambem e aceito para compatibilidade:
 
 ```bash
 curl -X POST https://erp-kb.seudominio.com.br/sync \
@@ -99,25 +62,37 @@ curl -X POST https://erp-kb.seudominio.com.br/sync \
   -H "Content-Type: application/json"
 ```
 
-Acompanhe os logs do indexador no Coolify para confirmar que os arquivos estão sendo processados.
+## GitHub Actions
 
----
+Configure os secrets:
 
-## Fluxo Automático (Após Configuração)
+| Secret | Valor |
+|---|---|
+| `MCP_SERVER_URL` | URL publica do MCP Server, sem barra final |
+| `ADMIN_TOKEN` | Mesmo valor de `ADMIN_TOKEN` do Coolify |
 
-1. Você edita um `.md` na wiki e faz commit + push no GitHub.
-2. O GitHub Actions detecta a mudança em `wiki/**/*.md`.
-3. O workflow `sync.yml` faz `POST /sync` automaticamente.
-4. O indexador re-processa apenas os arquivos alterados (verificação por hash).
-5. O agente de IA já consulta o conteúdo atualizado na próxima chamada.
+O workflow `.github/workflows/sync.yml` chama:
 
----
+```text
+POST {MCP_SERVER_URL}/api/admin/sync
+Header: X-API-Key: {ADMIN_TOKEN}
+```
+
+## ChatGPT Actions
+
+Para o GPT customizado, use apenas os endpoints de conhecimento:
+
+- `POST /api/knowledge/search`
+- `GET /api/knowledge/document/{doc_id}`
+
+Nao exponha `/api/admin/sync` no schema do GPT, porque ele serve para administracao e reindexacao.
 
 ## Troubleshooting
 
-| Problema | Solução |
-|---|---|
-| `FalkorDB não conecta` | Verifique se o service `falkordb` está healthy nos logs do Coolify |
-| `Modelo de embedding não carrega` | Primeira inicialização baixa ~80MB; aguarde ou verifique acesso à internet |
-| `POST /sync retorna 403` | Verifique se `ADMIN_TOKEN` bate entre o `.env` e o Secret do GitHub |
-| `Arquivos não indexados` | Confirme que o `status` do frontmatter é `active` (não `draft`) |
+| Problema | Causa provavel | Solucao |
+|---|---|---|
+| `Invalid arguments for procedure db.idx.vector.queryNodes` | Chamada antiga da procedure vetorial | Atualize a imagem com este codigo; a busca agora usa `queryNodes('Chunk', 'embedding', k, vecf32(vector))` |
+| Busca cai em fallback | Indice vetorial ausente, dados antigos sem `vecf32`, ou versao FalkorDB incompativel | Refaça o deploy e acione `/api/admin/sync` para recriar chunks com `vecf32`; o fallback ainda calcula similaridade semantica por cosseno, mas e mais lento |
+| `POST /api/admin/sync` retorna 403 | Token incorreto ou header errado | Use `X-API-Key` com o mesmo valor de `ADMIN_TOKEN` |
+| `GOOGLE_API_KEY must be set` | Chave Gemini ausente no servico | Configure `GOOGLE_API_KEY` no indexer e no MCP server |
+| Health `degraded` | MCP nao conseguiu pingar FalkorDB | Verifique se o servico `falkordb` esta healthy no Docker/Coolify |

@@ -26,7 +26,7 @@ services:
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       WIKI_PATH: /app/repo/wiki
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/text-embedding-004}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/gemini-embedding-2}
       OTEL_SERVICE_NAME: indexer
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     # Porta 9000 apenas na rede interna (não exposta externamente)
@@ -52,7 +52,7 @@ services:
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       MCP_PORT: "8000"
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/text-embedding-004}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/gemini-embedding-2}
       OTEL_SERVICE_NAME: mcp-server
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     networks:

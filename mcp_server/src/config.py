@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     GOOGLE_API_KEY: Optional[str] = None
     MCP_PORT: int = 8000
     
-    EMBEDDING_MODEL: str = "models/text-embedding-004"
+    EMBEDDING_MODEL: str = "models/gemini-embedding-2"
     
     OTEL_SERVICE_NAME: str = "mcp-server"
     OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None

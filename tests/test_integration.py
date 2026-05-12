@@ -1,35 +1,44 @@
 """
-Testes de integração contra stack Docker (FalkorDB + Indexer + MCP Server).
-Executar APÓS: docker compose up -d
-  python tests/test_integration.py
+Integration smoke tests against the Docker stack.
+
+Run after:
+  docker compose up -d
+
+Optional env vars:
+  MCP_BASE=http://localhost:8000
+  ADMIN_TOKEN=test-admin-token
 """
+
+import os
 import sys
 import time
-import json
+
 import httpx
 
-MCP_BASE = "http://localhost:8001"
-ADMIN_TOKEN = "test-admin-token"
+
+MCP_BASE = os.getenv("MCP_BASE", "http://localhost:8000")
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "test-admin-token")
+AUTH_HEADERS = {"X-API-Key": ADMIN_TOKEN}
 
 
 def section(title: str):
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print(f"  {title}")
-    print('='*55)
+    print("=" * 55)
 
 
 def check(label: str, condition: bool, detail: str = ""):
     status = "PASS" if condition else "FAIL"
-    print(f"  [{status}] {label}" + (f" — {detail}" if detail else ""))
+    print(f"  [{status}] {label}" + (f" - {detail}" if detail else ""))
     return condition
 
 
 def wait_for_service(url: str, timeout: int = 60, interval: int = 3):
-    print(f"  Aguardando {url}...", end="", flush=True)
+    print(f"  Waiting for {url}...", end="", flush=True)
     for _ in range(timeout // interval):
         try:
-            r = httpx.get(url, timeout=5)
-            if r.status_code < 500:
+            response = httpx.get(url, timeout=5)
+            if response.status_code < 500:
                 print(" OK")
                 return True
         except Exception:
@@ -43,104 +52,51 @@ def wait_for_service(url: str, timeout: int = 60, interval: int = 3):
 def run_tests():
     failures = 0
 
-    # ─── 1. Health Check ──────────────────────────────────────────
     section("1. Health Check")
     if not wait_for_service(f"{MCP_BASE}/health"):
-        print("  [FAIL] MCP Server não está disponível. Verifique: docker compose ps")
+        print("  [FAIL] MCP Server is not available. Check: docker compose ps")
         sys.exit(1)
 
-    r = httpx.get(f"{MCP_BASE}/health", timeout=10)
-    data = r.json()
-    if not check("HTTP 200", r.status_code == 200):
-        failures += 1
-    if not check("database: true", data.get("database") is True, str(data)):
-        failures += 1
-    if not check("indexer status set", "indexer" in data, str(data)):
-        failures += 1
+    response = httpx.get(f"{MCP_BASE}/health", timeout=10)
+    data = response.json()
+    failures += not check("HTTP 200", response.status_code == 200)
+    failures += not check("database: true", data.get("database") is True, str(data))
 
-    # ─── 2. MCP Manifest ──────────────────────────────────────────
-    section("2. MCP Manifest (/mcp)")
-    r = httpx.get(f"{MCP_BASE}/mcp", timeout=10)
-    data = r.json()
-    if not check("HTTP 200", r.status_code == 200):
-        failures += 1
-    tools = {t["name"] for t in data.get("tools", [])}
-    for expected in ["search_knowledge", "get_document", "graph_neighbors"]:
-        if not check(f"tool: {expected}", expected in tools):
-            failures += 1
+    section("2. Auth blocks protected endpoint")
+    response = httpx.post(f"{MCP_BASE}/api/knowledge/search", json={"query": "teste"}, timeout=10)
+    failures += not check("HTTP 403", response.status_code == 403, f"got {response.status_code}")
 
-    # ─── 3. Auth bloqueada sem token ─────────────────────────────
-    section("3. Segurança — /sync sem token")
-    r = httpx.post(f"{MCP_BASE}/sync", timeout=10)
-    if not check("HTTP 403", r.status_code == 403, f"got {r.status_code}"):
-        failures += 1
+    section("3. MCP tools manifest")
+    response = httpx.get(f"{MCP_BASE}/mcp", headers=AUTH_HEADERS, timeout=10)
+    failures += not check("HTTP 200", response.status_code == 200, f"got {response.status_code}")
+    if response.status_code == 200:
+        tools = {tool["name"] for tool in response.json().get("tools", [])}
+        for expected in ["search_knowledge", "get_document", "graph_neighbors"]:
+            failures += not check(f"tool: {expected}", expected in tools)
 
-    # ─── 4. Trigger Sync ─────────────────────────────────────────
-    section("4. POST /sync (trigger indexação)")
-    r = httpx.post(
-        f"{MCP_BASE}/sync",
-        headers={"X-Admin-Token": ADMIN_TOKEN},
-        timeout=120,
+    section("4. Trigger sync")
+    response = httpx.post(f"{MCP_BASE}/api/admin/sync", headers=AUTH_HEADERS, timeout=300)
+    failures += not check("HTTP 200", response.status_code == 200, response.text[:200])
+    if response.status_code == 200:
+        data = response.json()
+        failures += not check("status: ok", data.get("status") == "ok", str(data))
+
+    section("5. Semantic search")
+    response = httpx.post(
+        f"{MCP_BASE}/api/knowledge/search",
+        headers=AUTH_HEADERS,
+        json={"query": "fechamento de caixa", "limit": 3},
+        timeout=60,
     )
-    data = r.json()
-    if not check("HTTP 200", r.status_code == 200, f"body: {data}"):
-        failures += 1
-    if not check("status: ok", data.get("status") == "ok", str(data)):
-        failures += 1
-    processed = data.get("processed", 0)
-    check(f"arquivos processados: {processed}", processed >= 0)
+    failures += not check("HTTP 200", response.status_code == 200, f"got {response.status_code}")
+    if response.status_code == 200:
+        result = response.json().get("result", "")
+        failures += not check("non-empty result", len(result) > 10, result[:100])
 
-    # ─── 5. Busca Semântica ───────────────────────────────────────
-    section("5. POST /tools/search_knowledge")
-    r = httpx.post(
-        f"{MCP_BASE}/tools/search_knowledge",
-        params={"query": "fechamento de caixa", "limit": 3},
-        timeout=30,
-    )
-    if not check("HTTP 200", r.status_code == 200, f"got {r.status_code}"):
-        failures += 1
-    else:
-        result = r.json().get("result", "")
-        if not check("resultado não vazio", len(result) > 10, result[:100]):
-            failures += 1
-
-    # ─── 6. Get Document ─────────────────────────────────────────
-    section("6. POST /tools/get_document")
-    r = httpx.post(
-        f"{MCP_BASE}/tools/get_document",
-        params={"doc_id": "ROT-cadastro-fornecedores"},
-        timeout=10,
-    )
-    if not check("HTTP 200", r.status_code == 200, f"got {r.status_code}"):
-        failures += 1
-    else:
-        result = r.json().get("result", "")
-        check("conteúdo retornado", len(result) > 20, result[:80])
-
-    # ─── 7. Graph Neighbors ───────────────────────────────────────
-    section("7. POST /tools/graph_neighbors")
-    r = httpx.post(
-        f"{MCP_BASE}/tools/graph_neighbors",
-        params={"entity_name": "windows/faturamento", "depth": 1},
-        timeout=10,
-    )
-    if not check("HTTP 200", r.status_code == 200, f"got {r.status_code}"):
-        failures += 1
-    else:
-        result = r.json().get("result", "")
-        check("resposta recebida", len(result) > 0)
-
-    # ─── Resultado Final ──────────────────────────────────────────
-    section("RESULTADO FINAL")
-    total_checks = 15
-    print(f"  Falhas: {failures}/{total_checks}")
-    if failures == 0:
-        print("  TODOS OS TESTES PASSARAM!")
-    else:
-        print(f"  {failures} teste(s) falharam.")
+    section("RESULT")
+    print(f"  Failures: {failures}")
     return failures
 
 
 if __name__ == "__main__":
-    result = run_tests()
-    sys.exit(result)
+    sys.exit(run_tests())

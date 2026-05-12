@@ -1,31 +1,41 @@
 # ERP KB FalkorDB GraphRAG
 
-Este projeto implementa uma base de conhecimento em grafo (GraphRAG) para a ATS Informática, integrando o FalkorDB com embeddings do Google Gemini.
+Base de conhecimento em grafo para a ATS Informatica, usando FalkorDB e embeddings do Google Gemini.
 
-## Arquitetura
-- **Indexer:** Processa a wiki em Markdown, gera embeddings e popula o FalkorDB.
-- **MCP Server:** Interface Stateless HTTP (JSON-RPC) e REST para consulta à base.
-- **FalkorDB:** Banco de dados de grafos com suporte a busca vetorial.
+## Componentes
 
-## CI/CD (GitHub Actions)
-O projeto está configurado para gerar imagens Docker automaticamente no **GHCR.io** a cada push.
+- **Indexer:** processa Markdown, gera embeddings com `models/gemini-embedding-2` e popula o FalkorDB.
+- **MCP Server/API:** expoe MCP stateless e endpoints REST para ChatGPT Actions.
+- **FalkorDB:** armazena documentos, chunks, tags, modulos e indice vetorial.
 
-### Como subir para o GitHub:
-1. Crie um repositório vazio no GitHub chamado `erp-kb-falkordb`.
-2. Execute os comandos abaixo no seu terminal:
-   ```bash
-   git remote add origin https://github.com/paulo-atsinformatica/erp-kb-falkordb.git
-   git branch -M main
-   git push -u origin main
-   ```
+## Endpoints principais
 
-### Como rodar em Produção:
-Após o GitHub Actions completar o build das imagens:
-1. Copie o `docker-compose.yml` e o seu `.env` para o servidor.
-2. Execute:
-   ```bash
-   docker compose up -d
-   ```
+| Endpoint | Uso |
+|---|---|
+| `POST /api/knowledge/search` | Busca semantica |
+| `GET /api/knowledge/document/{doc_id}` | Documento completo |
+| `POST /api/admin/sync` | Reindexacao administrativa |
+| `GET /health` | Health check |
 
-## Segurança
-A API está protegida via header `X-API-Key`. Certifique-se de configurar o `ADMIN_TOKEN` no seu arquivo `.env`.
+Todos os endpoints protegidos usam `X-API-Key` com o valor de `ADMIN_TOKEN`.
+O endpoint legado `POST /sync` tambem aceita `X-Admin-Token` para compatibilidade.
+
+## Deploy
+
+As imagens Docker sao geradas no GHCR pelo GitHub Actions. Para producao:
+
+1. Configure as variaveis no servidor, incluindo `GOOGLE_API_KEY`, `ADMIN_TOKEN` e `EMBEDDING_MODEL=models/gemini-embedding-2`.
+2. Suba a stack:
+
+```bash
+docker compose up -d
+```
+
+3. Acione a primeira indexacao:
+
+```bash
+curl -X POST https://seu-servidor/api/admin/sync \
+  -H "X-API-Key: seu_admin_token"
+```
+
+Veja detalhes em `docs/deploy-coolify.md` e `docs/instrucoes_custom_gpt.md`.

@@ -1,90 +1,107 @@
-# Arquitetura — ERP KB FalkorDB
+# Arquitetura - ERP KB FalkorDB
 
-## Visão Geral
+## Visao geral
 
-```
-GitHub (wiki/) ─── push ──► GitHub Actions ──► POST /sync
-                                                     │
-                                              [MCP Server]
-                                                     │
-                                              [Indexer Service]
-                                                     │
-                                              [FalkorDB Graph]
-                                                     │
-                                              [MCP Server] ◄── Agente IA
+```text
+GitHub wiki/*.md -> GitHub Actions -> POST /api/admin/sync
+                                      |
+                                      v
+                                MCP Server
+                                      |
+                                      v
+                                Indexer Service
+                                      |
+                                      v
+                                FalkorDB Graph
+                                      |
+                                      v
+                           ChatGPT Actions / agentes IA
 ```
 
 ## Componentes
 
-### 1. FalkorDB
-- Banco de grafos + vetores.
-- Armazena nós: `Document`, `Chunk`, `Tag`, `Module`, `Entity`.
-- Relações: `HAS_CHUNK`, `HAS_TAG`, `BELONGS_TO_MODULE`, `RELATED_TO`.
-- Índice vetorial na propriedade `embedding` dos nós `Chunk` (cosine, 384 dims).
+### FalkorDB
 
-### 2. Indexer Service
-| Módulo | Responsabilidade |
+- Banco de grafos com suporte a indice vetorial.
+- Armazena nos `Document`, `Chunk`, `Tag` e `Module`.
+- Relacoes: `HAS_CHUNK`, `HAS_TAG` e `BELONGS_TO_MODULE`.
+- O embedding dos chunks usa `models/gemini-embedding-2`, com indice vetorial `cosine` de 3072 dimensoes.
+- A busca vetorial usa a assinatura atual do FalkorDB:
+  `db.idx.vector.queryNodes('Chunk', 'embedding', k, vecf32([...]))`.
+
+### Indexer Service
+
+| Modulo | Responsabilidade |
 |---|---|
-| `markdown_parser.py` | Lê frontmatter e corpo do `.md` |
-| `chunker.py` | Divide conteúdo por headings H1/H2 |
-| `embeddings.py` | Gera vetores com `all-MiniLM-L6-v2` |
-| `falkordb_repository.py` | Persiste e atualiza grafos no banco |
-| `main.py` | Orquestra o sync, verifica hashes, ignora drafts |
+| `markdown_parser.py` | Le frontmatter e corpo do `.md` |
+| `chunker.py` | Divide conteudo por headings H1/H2 |
+| `embeddings.py` | Gera embeddings com Google Gemini |
+| `falkordb_repository.py` | Persiste documentos, chunks e relacionamentos no FalkorDB |
+| `main.py` | Orquestra sync, `git pull`, hash de conteudo e remocao de deletados |
 
-**Lógica de Sincronização:**
-1. Para cada `.md` no volume `wiki/`:
-   - Se `status: draft` → apaga entrada antiga (se existir) e ignora.
-   - Calcula SHA-256 do conteúdo.
-   - Se hash igual ao armazenado → sem mudança, ignora.
-   - Se diferente → re-indexa completamente (apaga chunks antigos, recria).
+Logica de sincronizacao:
 
-### 3. MCP Server
-Exposição de tools via protocolo MCP sobre FastAPI/SSE.
+1. Faz `git pull` no repositorio da wiki.
+2. Para cada `.md` em `WIKI_PATH`, exceto `index.md` e `log.md`:
+   - Se `status: draft`, remove o documento antigo do grafo e ignora.
+   - Calcula SHA-256 do conteudo.
+   - Se o hash for igual ao armazenado, nao reindexa.
+   - Se mudou, remove os chunks antigos e recria documento, chunks, tags e modulos.
+3. Remove do banco documentos que nao existem mais no diretorio da wiki.
 
-| Tool | Parâmetros | Descrição |
-|---|---|---|
-| `search_knowledge` | `query`, `limit` | Busca semântica por similaridade vetorial |
-| `get_document` | `doc_id` | Retorna conteúdo original completo |
-| `graph_neighbors` | `entity_name`, `depth` | Explora relações do grafo (máx depth=2) |
+### MCP Server / API REST
 
-**Segurança:**
-- Header `X-Admin-Token` obrigatório no endpoint `/sync`.
-- FalkorDB não é exposto externamente (rede Docker interna).
+O servidor expoe MCP stateless e endpoints REST. Para ChatGPT Actions, use os endpoints REST.
 
-## Modelo de Dados (Cypher)
+| Endpoint | Metodo | Header | Uso |
+|---|---:|---|---|
+| `/api/knowledge/search` | POST | `X-API-Key` | Busca semantica na base |
+| `/api/knowledge/document/{doc_id}` | GET | `X-API-Key` | Recupera documento completo |
+| `/api/admin/sync` | POST | `X-API-Key` | Aciona reindexacao |
+| `/sync` | POST | `X-API-Key` ou `X-Admin-Token` | Alias legado para compatibilidade |
+| `/health` | GET | nenhum | Health check |
+| `/mcp` | POST | `X-API-Key` | MCP JSON-RPC stateless |
+
+## Modelo de dados
 
 ```cypher
-// Nós
-(:Document {id, path, title, type, audience, status, content_hash, updated_at, raw_content})
-(:Chunk {id, heading, content, position, embedding})
+(:Document {
+  id,
+  path,
+  title,
+  type,
+  audience,
+  status,
+  content_hash,
+  updated_at,
+  raw_content
+})
+
+(:Chunk {
+  id,
+  heading,
+  content,
+  position,
+  embedding
+})
+
 (:Tag {name})
 (:Module {slug})
-(:Entity {name, type})
 
-// Relações
 (:Document)-[:HAS_CHUNK]->(:Chunk)
 (:Document)-[:HAS_TAG]->(:Tag)
 (:Document)-[:BELONGS_TO_MODULE]->(:Module)
-(:Document)-[:RELATED_TO]->(:Entity)
 ```
 
-## Fluxo de Atualização Automática
+## Observacao sobre `graph_neighbors`
 
-1. Analista edita um `.md` e faz commit/push no GitHub.
-2. GitHub Actions executa o workflow `sync.yml`.
-3. O workflow faz `POST /sync` com o `ADMIN_TOKEN`.
-4. O MCP Server aciona o Indexer.
-5. O Indexer detecta o arquivo alterado via hash e re-indexa.
-6. O agente de IA automaticamente passa a ver o conteúdo atualizado.
+A tool `graph_neighbors` esta exposta no MCP, mas o indexador atual ainda nao cria nos `Entity` nem relacoes `RELATED_TO`. Portanto, ela tende a retornar vazio ate que a extracao de entidades seja implementada.
 
-## Recursos de RAM (VPS 8 GB)
+## Fluxo automatico
 
-| Componente | RAM estimada |
-|---|---|
-| FalkorDB | ~800 MB – 1.2 GB |
-| Indexer (com modelo MiniLM carregado) | ~300 MB |
-| MCP Server (FastAPI) | ~150 MB |
-| SO + buffers | ~1.5 GB |
-| **Total estimado** | **~3.5 GB** |
-
-> Sobram ~4.5 GB livres. O VPS de 8 GB é mais que suficiente para este MVP.
+1. O analista edita um `.md` e faz commit/push.
+2. O GitHub Actions executa `.github/workflows/sync.yml`.
+3. O workflow chama `POST /api/admin/sync` com `X-API-Key`.
+4. O MCP Server chama internamente o Indexer em `http://indexer:9000/trigger`.
+5. O Indexer atualiza apenas arquivos alterados.
+6. O ChatGPT passa a consultar o conteudo atualizado nas proximas chamadas.
