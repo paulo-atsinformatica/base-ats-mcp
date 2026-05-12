@@ -184,6 +184,112 @@ async def root():
     return {"mcp_endpoint": "/mcp", "openapi": "/openapi.json"}
 
 
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    app.openapi_schema = {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "ERP KB GraphRAG API",
+            "version": "1.0.0",
+            "description": "API somente leitura para consultar a base de conhecimento GraphRAG da ATS Informatica.",
+        },
+        "servers": [{"url": "https://mcp-base.163.176.255.228.sslip.io"}],
+        "paths": {
+            "/api/knowledge/search": {
+                "post": {
+                    "operationId": "searchKnowledge",
+                    "summary": "Busca na base de conhecimento",
+                    "description": "Busca semantica por trechos relevantes na base de conhecimento. Operacao somente leitura.",
+                    "security": [{"ApiKeyAuth": []}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/SearchRequest"}
+                            }
+                        },
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Resultado da busca",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/TextResult"}
+                                }
+                            },
+                        }
+                    },
+                }
+            },
+            "/api/knowledge/document/{doc_id}": {
+                "get": {
+                    "operationId": "getKnowledgeDocument",
+                    "summary": "Recupera documento completo",
+                    "description": "Retorna o conteudo integral de um documento pelo Doc ID. Operacao somente leitura.",
+                    "security": [{"ApiKeyAuth": []}],
+                    "parameters": [
+                        {
+                            "name": "doc_id",
+                            "in": "path",
+                            "required": True,
+                            "description": "Doc ID retornado pela busca.",
+                            "schema": {"type": "string"},
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Documento completo",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/TextResult"}
+                                }
+                            },
+                        }
+                    },
+                }
+            },
+        },
+        "components": {
+            "schemas": {
+                "SearchRequest": {
+                    "type": "object",
+                    "required": ["query"],
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Pergunta, erro ou termo tecnico a pesquisar.",
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Quantidade maxima de trechos.",
+                            "default": 3,
+                            "minimum": 1,
+                            "maximum": 10,
+                        },
+                    },
+                },
+                "TextResult": {
+                    "type": "object",
+                    "properties": {"result": {"type": "string"}},
+                },
+            },
+            "securitySchemes": {
+                "ApiKeyAuth": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Key",
+                }
+            },
+        },
+    }
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
+
+
 if __name__ == "__main__":
     import uvicorn
 

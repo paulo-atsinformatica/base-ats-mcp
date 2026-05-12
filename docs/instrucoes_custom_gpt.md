@@ -1,6 +1,8 @@
-# Custom GPT - Configuracao das Actions
+# Custom GPT - Configuracao da Action somente leitura
 
 Este documento contem o prompt recomendado e o schema OpenAPI para conectar um GPT customizado do ChatGPT a base GraphRAG do ERP KB.
+
+Importante: esta Action e somente leitura. Ela deve apenas buscar trechos e recuperar documentos ja existentes. Nao inclua endpoints de criacao, edicao, exclusao, sincronizacao ou administracao no schema do GPT.
 
 Referencia OpenAI: GPT Actions usam duas partes principais, autenticacao e um schema OpenAPI que descreve os endpoints disponiveis. Para API Key, o ChatGPT permite header customizado.
 
@@ -20,6 +22,9 @@ Regras:
 5. Ao usar informacao da base, cite o titulo ou Doc ID encontrado e reformule a solucao em linguagem amigavel.
 6. Se a base nao trouxer solucao, diga isso de forma transparente e sugira troubleshooting basico ou abertura de ticket com o cenario detalhado.
 7. Procedimentos com banco Firebird, registro do Windows, certificados, servidor ou manipulacao de arquivos devem conter alerta de cautela tecnica.
+8. A Action da Base de Conhecimento e somente leitura: use-a apenas para pesquisar e recuperar documentos existentes.
+9. Nunca tente criar, editar, excluir, reindexar, sincronizar ou enviar novos documentos pela Action.
+10. Se o usuario pedir para incluir, alterar ou apagar conteudo da base, explique que essa operacao deve ser feita fora do GPT pelo processo administrativo correto.
 ```
 
 ## 2. Action da Base de Conhecimento GraphRAG
@@ -33,9 +38,18 @@ No editor do GPT:
    - **Auth Type:** Custom
    - **Custom Header Name:** `X-API-Key`
    - **API Key:** mesmo valor de `ADMIN_TOKEN` configurado no servidor
-4. Em **Schema**, cole o JSON abaixo.
+4. Em **Schema**, use uma das opcoes:
+   - importe diretamente `https://mcp-base.163.176.255.228.sslip.io/openapi.json` depois do redeploy desta versao; ou
+   - cole manualmente o JSON abaixo.
 
 Troque a URL em `servers[0].url` pela URL publica real do seu MCP Server.
+
+Este schema expoe somente:
+
+- `POST /api/knowledge/search`
+- `GET /api/knowledge/document/{doc_id}`
+
+Nao adicione `/api/admin/sync`, `/sync`, `/mcp`, endpoints de escrita ou qualquer rota administrativa.
 
 ```json
 {
@@ -43,7 +57,7 @@ Troque a URL em `servers[0].url` pela URL publica real do seu MCP Server.
   "info": {
     "title": "ERP KB GraphRAG API",
     "version": "1.0.0",
-    "description": "API para consultar a base de conhecimento GraphRAG da ATS Informatica."
+    "description": "API somente leitura para consultar a base de conhecimento GraphRAG da ATS Informatica."
   },
   "servers": [
     {
@@ -55,7 +69,7 @@ Troque a URL em `servers[0].url` pela URL publica real do seu MCP Server.
       "post": {
         "operationId": "searchKnowledge",
         "summary": "Busca na base de conhecimento",
-        "description": "Busca semantica por trechos relevantes na base de conhecimento.",
+        "description": "Busca semantica por trechos relevantes na base de conhecimento. Operacao somente leitura.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -89,7 +103,7 @@ Troque a URL em `servers[0].url` pela URL publica real do seu MCP Server.
       "get": {
         "operationId": "getKnowledgeDocument",
         "summary": "Recupera documento completo",
-        "description": "Retorna o conteudo integral de um documento pelo Doc ID.",
+        "description": "Retorna o conteudo integral de um documento pelo Doc ID. Operacao somente leitura.",
         "security": [
           {
             "ApiKeyAuth": []
@@ -175,5 +189,7 @@ O ChatGPT deve pedir permissao para chamar o dominio configurado no schema. Auto
 ## 4. Observacoes de seguranca
 
 - Nao inclua `/api/admin/sync` no schema do GPT.
+- Nao inclua `/sync`, `/mcp`, rotas de administracao ou rotas que criem/alterem dados.
+- O GPT deve apenas recuperar informacoes existentes usando busca e leitura de documento.
 - Use uma API key longa e diferente de outras senhas.
 - Se trocar `ADMIN_TOKEN` no servidor, atualize a API Key da Action.
