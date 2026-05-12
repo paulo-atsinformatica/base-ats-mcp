@@ -229,7 +229,7 @@ def custom_openapi():
             "version": "1.0.0",
             "description": "API somente leitura para consultar a base de conhecimento GraphRAG da ATS Informatica.",
         },
-        "servers": [{"url": "https://mcp-base.163.176.255.228.sslip.io"}],
+        "servers": [{"url": settings.PUBLIC_BASE_URL.rstrip("/")}],
         "paths": {
             "/api/knowledge/search": {
                 "post": {

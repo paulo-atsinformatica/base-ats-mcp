@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     
     ADMIN_TOKEN: str = "change-me"
     PUBLIC_TOKEN: Optional[str] = None
+    PUBLIC_BASE_URL: str = "https://mcp.base.atsinformatica.com.br"
     GOOGLE_API_KEY: Optional[str] = None
     MCP_PORT: int = 8000
     

@@ -55,7 +55,7 @@ Use OpenAPI quando o consumidor for:
 Endpoint publico do schema:
 
 ```text
-https://mcp-base.163.176.255.228.sslip.io/openapi.json
+https://mcp.base.atsinformatica.com.br/openapi.json
 ```
 
 Esse schema e somente leitura e expoe apenas:
@@ -128,7 +128,7 @@ No GPT Builder:
 4. Em **Schema**, importe:
 
 ```text
-https://mcp-base.163.176.255.228.sslip.io/openapi.json
+https://mcp.base.atsinformatica.com.br/openapi.json
 ```
 
 O GPT deve passar a enxergar duas operacoes:
@@ -144,7 +144,7 @@ Para GPTs diferentes, use o mesmo OpenAPI e troque apenas a API Key:
 ### 4.2 Exemplo de busca REST
 
 ```bash
-curl -X POST "https://mcp-base.163.176.255.228.sslip.io/api/knowledge/search" \
+curl -X POST "https://mcp.base.atsinformatica.com.br/api/knowledge/search" \
   -H "X-API-Key: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query":"Backup Now unable to load dbxfb.dll","limit":3}'
@@ -161,7 +161,7 @@ Resposta esperada:
 ### 4.3 Exemplo de recuperacao de documento
 
 ```bash
-curl -X GET "https://mcp-base.163.176.255.228.sslip.io/api/knowledge/document/PROC-backup-now-identificar-alterar-caminho-bd" \
+curl -X GET "https://mcp.base.atsinformatica.com.br/api/knowledge/document/PROC-backup-now-identificar-alterar-caminho-bd" \
   -H "X-API-Key: SEU_TOKEN"
 ```
 
@@ -190,7 +190,7 @@ Regra importante: nao responder troubleshooting tecnico apenas com memoria local
 ### 5.1 Listar tools
 
 ```bash
-curl -X POST "https://mcp-base.163.176.255.228.sslip.io/mcp" \
+curl -X POST "https://mcp.base.atsinformatica.com.br/mcp" \
   -H "X-API-Key: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -203,7 +203,7 @@ curl -X POST "https://mcp-base.163.176.255.228.sslip.io/mcp" \
 ### 5.2 Chamar busca semantica
 
 ```bash
-curl -X POST "https://mcp-base.163.176.255.228.sslip.io/mcp" \
+curl -X POST "https://mcp.base.atsinformatica.com.br/mcp" \
   -H "X-API-Key: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -223,7 +223,7 @@ curl -X POST "https://mcp-base.163.176.255.228.sslip.io/mcp" \
 ### 5.3 Chamar recuperacao de documento
 
 ```bash
-curl -X POST "https://mcp-base.163.176.255.228.sslip.io/mcp" \
+curl -X POST "https://mcp.base.atsinformatica.com.br/mcp" \
   -H "X-API-Key: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -530,19 +530,19 @@ Use estes testes apos deploy.
 Health:
 
 ```bash
-curl "https://mcp-base.163.176.255.228.sslip.io/health"
+curl "https://mcp.base.atsinformatica.com.br/health"
 ```
 
 OpenAPI:
 
 ```bash
-curl "https://mcp-base.163.176.255.228.sslip.io/openapi.json"
+curl "https://mcp.base.atsinformatica.com.br/openapi.json"
 ```
 
 Busca:
 
 ```bash
-curl -X POST "https://mcp-base.163.176.255.228.sslip.io/api/knowledge/search" \
+curl -X POST "https://mcp.base.atsinformatica.com.br/api/knowledge/search" \
   -H "X-API-Key: SEU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"query":"fechamento de caixa","limit":3}'
@@ -551,7 +551,7 @@ curl -X POST "https://mcp-base.163.176.255.228.sslip.io/api/knowledge/search" \
 Documento:
 
 ```bash
-curl -X GET "https://mcp-base.163.176.255.228.sslip.io/api/knowledge/document/DOC_ID" \
+curl -X GET "https://mcp.base.atsinformatica.com.br/api/knowledge/document/DOC_ID" \
   -H "X-API-Key: SEU_TOKEN"
 ```
 

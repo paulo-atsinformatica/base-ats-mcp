@@ -51,6 +51,7 @@ services:
       FALKORDB_PORT: "6379"
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       PUBLIC_TOKEN: ${PUBLIC_TOKEN:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://mcp.base.atsinformatica.com.br}
       MCP_PORT: "8000"
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/gemini-embedding-2}

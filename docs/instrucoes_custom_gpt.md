@@ -48,7 +48,7 @@ No editor do GPT:
    - **API Key para GPT interno/analista:** valor de `ADMIN_TOKEN`
    - **API Key para GPT publico/cliente:** valor de `PUBLIC_TOKEN`
 4. Em **Schema**, use uma das opcoes:
-   - importe diretamente `https://mcp-base.163.176.255.228.sslip.io/openapi.json` depois do redeploy desta versao; ou
+   - importe diretamente `https://mcp.base.atsinformatica.com.br/openapi.json` depois do redeploy desta versao; ou
    - cole manualmente o JSON abaixo.
 
 Troque a URL em `servers[0].url` pela URL publica real do seu MCP Server.
@@ -70,7 +70,7 @@ Nao adicione `/api/admin/sync`, `/sync`, `/mcp`, endpoints de escrita ou qualque
   },
   "servers": [
     {
-      "url": "https://mcp-base.163.176.255.228.sslip.io"
+      "url": "https://mcp.base.atsinformatica.com.br"
     }
   ],
   "paths": {
