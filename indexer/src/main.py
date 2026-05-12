@@ -11,14 +11,18 @@ from .telemetry import tracer
 from .markdown_parser import markdown_parser
 from .chunker import chunker
 from .embeddings import embedding_generator
+from .entity_extractor import extract_entities
 from .falkordb_repository import repo
+
+INDEX_SCHEMA_VERSION = "entities-v1"
 
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
 
 def get_file_hash(content: str) -> str:
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+    payload = f"{INDEX_SCHEMA_VERSION}\n{content}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def git_pull():
@@ -107,13 +111,14 @@ def process_file(file_path: Path):
                 "tags": metadata.get("tags", []) or [],
                 "modulos": metadata.get("modulos", []) or [],
             }
+            doc_data["entities"] = extract_entities(doc_data, parsed["content"])
 
             if not doc_data["id"]:
                 logger.warning("missing_id_skipping", path=rel_path)
                 return
 
             repo.save_document(doc_data, chunks, embeddings)
-            logger.info("file_indexed", path=rel_path, chunks=len(chunks))
+            logger.info("file_indexed", path=rel_path, chunks=len(chunks), entities=len(doc_data["entities"]))
 
         except Exception as e:
             logger.error("file_processing_failed", path=rel_path, error=str(e))

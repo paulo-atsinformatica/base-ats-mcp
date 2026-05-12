@@ -115,6 +115,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "indexer"))
 
 from src.markdown_parser import MarkdownParser
 from src.chunker import Chunker
+from src.entity_extractor import extract_entities, normalize_entity_name
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -246,3 +247,29 @@ class TestAudienceRule:
 
     def test_case_insensitive(self):
         assert is_db_content("use o select para buscar dados")
+
+
+class TestEntityExtractor:
+    def test_normalizes_common_aliases(self):
+        assert normalize_entity_name("NFE") == "nf-e"
+        assert normalize_entity_name("  Backup   Now  ") == "backup now"
+
+    def test_extracts_metadata_and_patterns(self):
+        doc_data = {
+            "title": "Erro no Backup Now",
+            "tags": ["backup", "Firebird"],
+            "modulos": ["windows/backup"],
+        }
+        content = "Unable to load dbxfb.dll ao conectar empresa.fdb. Rejeicao 539 na NF-e."
+        entities = extract_entities(doc_data, content)
+        names = {entity["name"] for entity in entities}
+        types = {entity["name"]: entity["type"] for entity in entities}
+
+        assert "backup now" in names
+        assert "dbxfb.dll" in names
+        assert "empresa.fdb" in names
+        assert "rejeicao 539" in names
+        assert "windows/backup" in names
+        assert types["dbxfb.dll"] == "dll"
+        assert types["empresa.fdb"] == "database_file"
+        assert types["rejeicao 539"] == "sefaz_rejection"

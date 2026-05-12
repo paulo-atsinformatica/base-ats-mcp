@@ -70,11 +70,15 @@ class FalkorDBRepository:
     def get_neighbors(self, entity_name: str, depth: int = 1, limit: int = 20):
         with tracer.start_as_current_span("falkordb_graph_neighbors"):
             safe_depth = max(1, min(int(depth), 2))
+            normalized_name = " ".join(entity_name.strip().lower().split())
             query = (
-                f"MATCH (e:Entity {{name: $name}})-[r*1..{safe_depth}]-(n) "
-                "RETURN e.name, type(r[0]), n.name, labels(n)[0] LIMIT $limit"
+                f"MATCH (e:Entity)-[r*1..{safe_depth}]-(n) "
+                "WHERE e.name = $name OR toLower(e.display_name) = $name "
+                "RETURN e.display_name, type(r[0]), "
+                "coalesce(n.display_name, n.name, n.title, n.slug, n.id, n.path), "
+                "labels(n)[0] LIMIT $limit"
             )
-            res = self.graph.query(query, {"name": entity_name, "limit": limit})
+            res = self.graph.query(query, {"name": normalized_name, "limit": limit})
             return res.result_set
 
     def check_health(self):

@@ -99,6 +99,47 @@ class FalkorDBRepository:
                 """
                 self.graph.query(mod_query, {"doc_id": doc_data["id"], "mod_slug": module_slug})
 
+            self._save_entities(doc_data)
+
+    def _save_entities(self, doc_data: dict):
+        entities = doc_data.get("entities", [])
+        for entity in entities:
+            entity_query = """
+            MATCH (d:Document {id: $doc_id})
+            MERGE (e:Entity {name: $name})
+            SET e.display_name = $display_name,
+                e.type = $type
+            MERGE (d)-[:MENTIONS]->(e)
+            """
+            self.graph.query(
+                entity_query,
+                {
+                    "doc_id": doc_data["id"],
+                    "name": entity["name"],
+                    "display_name": entity["display_name"],
+                    "type": entity["type"],
+                },
+            )
+
+            if entity["type"] == "module":
+                module_query = """
+                MATCH (e:Entity {name: $entity_name})
+                MERGE (m:Module {slug: $module_slug})
+                MERGE (e)-[:IN_MODULE]->(m)
+                """
+                self.graph.query(
+                    module_query,
+                    {"entity_name": entity["name"], "module_slug": entity["name"]},
+                )
+
+            if entity["type"] == "tag":
+                tag_query = """
+                MATCH (e:Entity {name: $entity_name})
+                MERGE (t:Tag {name: $tag_name})
+                MERGE (e)-[:HAS_TAG_ENTITY]->(t)
+                """
+                self.graph.query(tag_query, {"entity_name": entity["name"], "tag_name": entity["name"]})
+
     def delete_document(self, path: str):
         with tracer.start_as_current_span("falkordb_delete_document"):
             query = """
