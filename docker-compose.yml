@@ -14,7 +14,7 @@ services:
       retries: 5
 
   indexer:
-    image: ghcr.io/paulo-atsinformatica/erp-kb-indexer:latest
+    image: ghcr.io/paulo-atsinformatica/base-ats-indexer:latest
     # build:
     #   context: ./indexer
     container_name: erp-kb-indexer
@@ -40,7 +40,7 @@ services:
     restart: on-failure
 
   mcp-server:
-    image: ghcr.io/paulo-atsinformatica/erp-kb-mcp-server:latest
+    image: ghcr.io/paulo-atsinformatica/base-ats-mcp-server:latest
     # build:
     #   context: ./mcp_server
     container_name: erp-kb-mcp-server

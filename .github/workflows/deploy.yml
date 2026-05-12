@@ -7,8 +7,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_INDEXER: ${{ github.repository_owner }}/erp-kb-indexer
-  IMAGE_NAME_MCP: ${{ github.repository_owner }}/erp-kb-mcp-server
+  IMAGE_NAME_INDEXER: ${{ github.repository_owner }}/base-ats-indexer
+  IMAGE_NAME_MCP: ${{ github.repository_owner }}/base-ats-mcp-server
 
 jobs:
   build-and-push:
