@@ -22,29 +22,32 @@ class FalkorDBRepository:
         self.db = FalkorDB(host=settings.FALKORDB_HOST, port=settings.FALKORDB_PORT)
         self.graph = self.db.select_graph(settings.FALKORDB_GRAPH_NAME)
 
-    def vector_search(self, query_vector: list, limit: int = 5):
+    def vector_search(self, query_vector: list, limit: int = 5, include_analyst: bool = True):
         with tracer.start_as_current_span("falkordb_vector_search"):
             query_vec = _vecf32_literal(query_vector)
             query = """
             CALL db.idx.vector.queryNodes('Chunk', 'embedding', $limit, __QUERY_VECTOR__)
             YIELD node, score
             MATCH (node)<-[:HAS_CHUNK]-(d:Document)
+            WHERE $include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst'
             RETURN d.id as doc_id, d.title as title, d.path as path,
                    node.heading as heading, node.content as content, score
             """.replace("__QUERY_VECTOR__", query_vec)
             try:
-                res = self.graph.query(query, {"limit": limit})
+                res = self.graph.query(query, {"limit": limit, "include_analyst": include_analyst})
                 return res.result_set
             except Exception as e:
                 logger.warning("vector_search_failed_falling_back_to_scan", error=str(e))
-                return self._vector_search_scan(query_vector, limit)
+                return self._vector_search_scan(query_vector, limit, include_analyst)
 
-    def _vector_search_scan(self, query_vector: list, limit: int = 5):
+    def _vector_search_scan(self, query_vector: list, limit: int = 5, include_analyst: bool = True):
         """Semantic fallback: cosine similarity over stored embeddings."""
         res = self.graph.query(
             "MATCH (c:Chunk)<-[:HAS_CHUNK]-(d:Document) "
             "WHERE c.embedding IS NOT NULL "
-            "RETURN d.id, d.title, d.path, c.heading, c.content, c.embedding"
+            "AND ($include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst') "
+            "RETURN d.id, d.title, d.path, c.heading, c.content, c.embedding",
+            {"include_analyst": include_analyst},
         )
         results = []
         qnorm = math.sqrt(sum(x * x for x in query_vector)) or 1.0
@@ -59,10 +62,14 @@ class FalkorDBRepository:
         results.sort(key=lambda r: r[5], reverse=True)
         return [list(r) for r in results[:limit]]
 
-    def get_document(self, doc_id: str):
+    def get_document(self, doc_id: str, include_analyst: bool = True):
         with tracer.start_as_current_span("falkordb_get_document"):
-            query = "MATCH (d:Document {id: $doc_id}) RETURN d.title, d.raw_content, d.path, d.type"
-            res = self.graph.query(query, {"doc_id": doc_id})
+            query = (
+                "MATCH (d:Document {id: $doc_id}) "
+                "WHERE $include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst' "
+                "RETURN d.title, d.raw_content, d.path, d.type"
+            )
+            res = self.graph.query(query, {"doc_id": doc_id, "include_analyst": include_analyst})
             if res.result_set:
                 return res.result_set[0]
             return None

@@ -1,4 +1,5 @@
 import httpx
+from dataclasses import dataclass
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Security, Request, Depends
@@ -19,17 +20,40 @@ api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 admin_token_header = APIKeyHeader(name="X-Admin-Token", auto_error=False)
 
 
+@dataclass(frozen=True)
+class AuthContext:
+    token: str
+    scope: str
+
+    @property
+    def include_analyst(self) -> bool:
+        return self.scope == "full"
+
+
 async def get_api_key(
     api_key: str = Security(api_key_header),
     admin_token: str = Security(admin_token_header),
 ):
     provided_token = api_key or admin_token
-    if not provided_token or provided_token != settings.ADMIN_TOKEN:
+    if provided_token and provided_token == settings.ADMIN_TOKEN:
+        return AuthContext(token=provided_token, scope="full")
+    if settings.PUBLIC_TOKEN and provided_token and provided_token == settings.PUBLIC_TOKEN:
+        return AuthContext(token=provided_token, scope="non_analyst")
+    if not provided_token:
         raise HTTPException(
             status_code=403,
             detail="Acesso negado: X-API-Key ou X-Admin-Token invalido ou ausente.",
         )
-    return provided_token
+    raise HTTPException(
+        status_code=403,
+        detail="Acesso negado: token sem permissao para este recurso.",
+    )
+
+
+async def get_full_access(auth: AuthContext = Depends(get_api_key)):
+    if auth.scope != "full":
+        raise HTTPException(status_code=403, detail="Acesso negado: recurso exige token full.")
+    return auth
 
 
 mcp_server = Server("erp-kb-graphrag")
@@ -77,15 +101,25 @@ async def handle_list_tools() -> list[types.Tool]:
 
 
 @mcp_server.call_tool()
-async def handle_call_tool(name: str, arguments: dict | None) -> list[types.TextContent]:
+async def handle_call_tool(
+    name: str,
+    arguments: dict | None,
+    auth: AuthContext | None = None,
+) -> list[types.TextContent]:
     if not arguments:
         arguments = {}
+    if auth is None:
+        auth = AuthContext(token="", scope="full")
     try:
         if name == "search_knowledge":
-            result = await search_knowledge(arguments.get("query"), arguments.get("limit", 5))
+            result = await search_knowledge(
+                arguments.get("query"),
+                arguments.get("limit", 5),
+                include_analyst=auth.include_analyst,
+            )
             return [types.TextContent(type="text", text=str(result))]
         if name == "get_document":
-            result = await get_document(arguments.get("doc_id"))
+            result = await get_document(arguments.get("doc_id"), include_analyst=auth.include_analyst)
             return [types.TextContent(type="text", text=str(result))]
         if name == "graph_neighbors":
             result = await graph_neighbors(arguments.get("entity_name"), arguments.get("depth", 1))
@@ -99,8 +133,8 @@ async def handle_call_tool(name: str, arguments: dict | None) -> list[types.Text
 app = FastAPI(title="ERP KB GraphRAG API", version="1.0.0")
 
 
-@app.post("/mcp", tags=["mcp"], dependencies=[Depends(get_api_key)])
-async def handle_mcp_stateless(request: Request):
+@app.post("/mcp", tags=["mcp"])
+async def handle_mcp_stateless(request: Request, auth: AuthContext = Depends(get_api_key)):
     """Endpoint MCP stateless: JSON-RPC sobre HTTP."""
     payload = await request.json()
 
@@ -114,7 +148,7 @@ async def handle_mcp_stateless(request: Request):
 
     if payload.get("method") == "tools/call":
         params = payload.get("params", {})
-        result = await handle_call_tool(params.get("name"), params.get("arguments"))
+        result = await handle_call_tool(params.get("name"), params.get("arguments"), auth)
         return {
             "jsonrpc": "2.0",
             "id": payload.get("id"),
@@ -140,14 +174,14 @@ class SearchRequest(BaseModel):
     limit: Optional[int] = 5
 
 
-@app.post("/api/knowledge/search", tags=["knowledge"], dependencies=[Depends(get_api_key)])
-async def api_search(req: SearchRequest):
-    return {"result": await search_knowledge(req.query, req.limit)}
+@app.post("/api/knowledge/search", tags=["knowledge"])
+async def api_search(req: SearchRequest, auth: AuthContext = Depends(get_api_key)):
+    return {"result": await search_knowledge(req.query, req.limit, include_analyst=auth.include_analyst)}
 
 
-@app.get("/api/knowledge/document/{doc_id}", tags=["knowledge"], dependencies=[Depends(get_api_key)])
-async def api_get_doc(doc_id: str):
-    return {"result": await get_document(doc_id)}
+@app.get("/api/knowledge/document/{doc_id}", tags=["knowledge"])
+async def api_get_doc(doc_id: str, auth: AuthContext = Depends(get_api_key)):
+    return {"result": await get_document(doc_id, include_analyst=auth.include_analyst)}
 
 
 @app.get("/health")
@@ -158,7 +192,7 @@ async def health_check():
     return {"status": "ok" if database_ok else "degraded", "database": database_ok}
 
 
-@app.post("/api/admin/sync", tags=["admin"], dependencies=[Depends(get_api_key)])
+@app.post("/api/admin/sync", tags=["admin"], dependencies=[Depends(get_full_access)])
 async def trigger_sync():
     """Aciona re-indexacao no Indexer Service (git pull + sync)."""
     indexer_internal_url = "http://indexer:9000"
@@ -173,7 +207,7 @@ async def trigger_sync():
         raise HTTPException(status_code=503, detail="Indexer service unavailable")
 
 
-@app.post("/sync", tags=["admin"], dependencies=[Depends(get_api_key)])
+@app.post("/sync", tags=["admin"], dependencies=[Depends(get_full_access)])
 async def trigger_sync_legacy():
     """Alias compativel com o workflow e docs antigos."""
     return await trigger_sync()

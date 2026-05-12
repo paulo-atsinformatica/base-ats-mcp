@@ -71,6 +71,13 @@ Autenticacao:
 Header: X-API-Key: <ADMIN_TOKEN>
 ```
 
+Escopos por token:
+
+| Token | Escopo | Acesso |
+|---|---|---|
+| `ADMIN_TOKEN` | `full` | Acessa todos os documentos, incluindo `audience: analyst` |
+| `PUBLIC_TOKEN` | `non_analyst` | Acessa somente documentos que nao sejam `audience: analyst` |
+
 Nao inclua endpoints administrativos no GPT, como:
 
 ```text
@@ -128,6 +135,11 @@ O GPT deve passar a enxergar duas operacoes:
 
 - `searchKnowledge`
 - `getKnowledgeDocument`
+
+Para GPTs diferentes, use o mesmo OpenAPI e troque apenas a API Key:
+
+- GPT interno/analista: `ADMIN_TOKEN`.
+- GPT publico/cliente: `PUBLIC_TOKEN`.
 
 ### 4.2 Exemplo de busca REST
 
@@ -446,6 +458,8 @@ Use apenas em automacoes controladas, GitHub Actions, operadores ou painel admin
 Regras recomendadas:
 
 - Nunca exponha `ADMIN_TOKEN` em documentos, exemplos publicos ou prints.
+- Use `PUBLIC_TOKEN` para agentes que nao podem ver documentos `audience: analyst`.
+- Trate documentos sem `audience` como restritos no servidor.
 - Em GPT Actions, exponha apenas rotas de leitura.
 - Use `X-API-Key` como header customizado.
 - Nao exponha FalkorDB diretamente para a internet.

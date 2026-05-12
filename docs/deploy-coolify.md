@@ -17,6 +17,7 @@ GITHUB_TOKEN=seu_github_personal_access_token
 
 MCP_PORT=8000
 ADMIN_TOKEN=uma_senha_segura_e_longa
+PUBLIC_TOKEN=uma_senha_publica_sem_acesso_analyst
 
 GOOGLE_API_KEY=sua_chave_google_ai_studio
 EMBEDDING_MODEL=models/gemini-embedding-2
@@ -93,6 +94,6 @@ Nao exponha `/api/admin/sync` no schema do GPT, porque ele serve para administra
 |---|---|---|
 | `Invalid arguments for procedure db.idx.vector.queryNodes` | Chamada antiga da procedure vetorial | Atualize a imagem com este codigo; a busca agora usa `queryNodes('Chunk', 'embedding', k, vecf32(vector))` |
 | Busca cai em fallback | Indice vetorial ausente, dados antigos sem `vecf32`, ou versao FalkorDB incompativel | Refaça o deploy e acione `/api/admin/sync` para recriar chunks com `vecf32`; o fallback ainda calcula similaridade semantica por cosseno, mas e mais lento |
-| `POST /api/admin/sync` retorna 403 | Token incorreto ou header errado | Use `X-API-Key` com o mesmo valor de `ADMIN_TOKEN` |
+| `POST /api/admin/sync` retorna 403 | Token incorreto, header errado ou uso de `PUBLIC_TOKEN` | Use `X-API-Key` com o valor de `ADMIN_TOKEN`; `PUBLIC_TOKEN` nao pode sincronizar |
 | `GOOGLE_API_KEY must be set` | Chave Gemini ausente no servico | Configure `GOOGLE_API_KEY` no indexer e no MCP server |
 | Health `degraded` | MCP nao conseguiu pingar FalkorDB | Verifique se o servico `falkordb` esta healthy no Docker/Coolify |

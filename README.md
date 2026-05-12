@@ -20,6 +20,8 @@ Base de conhecimento em grafo para a ATS Informatica, usando FalkorDB e embeddin
 Todos os endpoints protegidos usam `X-API-Key` com o valor de `ADMIN_TOKEN`.
 O endpoint legado `POST /sync` tambem aceita `X-Admin-Token` para compatibilidade.
 
+Tambem e possivel configurar `PUBLIC_TOKEN` para agentes sem acesso a documentos `audience: analyst`. O `ADMIN_TOKEN` tem escopo completo; o `PUBLIC_TOKEN` enxerga apenas documentos nao restritos.
+
 ## Deploy
 
 As imagens Docker sao geradas no GHCR pelo GitHub Actions. Para producao:

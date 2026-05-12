@@ -45,7 +45,8 @@ No editor do GPT:
    - **Authentication Type:** API Key
    - **Auth Type:** Custom
    - **Custom Header Name:** `X-API-Key`
-   - **API Key:** mesmo valor de `ADMIN_TOKEN` configurado no servidor
+   - **API Key para GPT interno/analista:** valor de `ADMIN_TOKEN`
+   - **API Key para GPT publico/cliente:** valor de `PUBLIC_TOKEN`
 4. Em **Schema**, use uma das opcoes:
    - importe diretamente `https://mcp-base.163.176.255.228.sslip.io/openapi.json` depois do redeploy desta versao; ou
    - cole manualmente o JSON abaixo.
@@ -204,3 +205,5 @@ Se o GPT responder usando apenas arquivo anexado, sem chamar `searchKnowledge`, 
 - O GPT deve apenas recuperar informacoes existentes usando busca e leitura de documento.
 - Use uma API key longa e diferente de outras senhas.
 - Se trocar `ADMIN_TOKEN` no servidor, atualize a API Key da Action.
+- Use `ADMIN_TOKEN` apenas para agentes internos que podem ver documentos `audience: analyst`.
+- Use `PUBLIC_TOKEN` para agentes que nao devem ver documentos `audience: analyst`.

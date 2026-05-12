@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     FALKORDB_GRAPH_NAME: str = "erp_kb"
     
     ADMIN_TOKEN: str = "change-me"
+    PUBLIC_TOKEN: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
     MCP_PORT: int = 8000
     
