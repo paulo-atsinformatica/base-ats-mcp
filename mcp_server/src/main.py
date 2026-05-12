@@ -156,6 +156,20 @@ async def health_check():
     from .falkordb_repository import repo
     return {"status": "ok" if repo.check_health() else "degraded"}
 
+@app.post("/api/admin/sync", tags=["admin"], dependencies=[Depends(get_api_key)])
+async def trigger_sync():
+    """Aciona re-indexação no Indexer Service (git pull + sync)."""
+    INDEXER_INTERNAL_URL = "http://indexer:9000"
+    logger.info("manual_sync_triggered")
+    try:
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            response = await client.post(f"{INDEXER_INTERNAL_URL}/trigger")
+            response.raise_for_status()
+            return response.json()
+    except httpx.RequestError as e:
+        logger.error("indexer_unreachable", error=str(e))
+        raise HTTPException(status_code=503, detail="Indexer service unavailable")
+
 @app.get("/")
 async def root():
     return {"mcp_endpoint": "/mcp", "openapi": "/openapi.json"}
