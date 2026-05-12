@@ -1,0 +1,72 @@
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: erp-kb-falkordb-db
+    volumes:
+      - falkordb_data:/data
+    networks:
+      - erp-kb-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  indexer:
+    image: ghcr.io/paulo-atsinformatica/erp-kb-indexer:latest
+    # build:
+    #   context: ./indexer
+    container_name: erp-kb-indexer
+    command: ["python", "-m", "src.main", "--server"]
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      GITHUB_REPO_URL: ${GITHUB_REPO_URL}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      WIKI_PATH: /app/repo/wiki
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/text-embedding-004}
+      OTEL_SERVICE_NAME: indexer
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    # Porta 9000 apenas na rede interna (não exposta externamente)
+    expose:
+      - "9000"
+    networks:
+      - erp-kb-network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    restart: on-failure
+
+  mcp-server:
+    image: ghcr.io/paulo-atsinformatica/erp-kb-mcp-server:latest
+    # build:
+    #   context: ./mcp_server
+    container_name: erp-kb-mcp-server
+    ports:
+      - "${MCP_PORT:-8000}:8000"
+    environment:
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: "6379"
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
+      MCP_PORT: "8000"
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/text-embedding-004}
+      OTEL_SERVICE_NAME: mcp-server
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    networks:
+      - erp-kb-network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      indexer:
+        condition: service_started
+    restart: always
+
+networks:
+  erp-kb-network:
+    driver: bridge
+
+volumes:
+  falkordb_data:

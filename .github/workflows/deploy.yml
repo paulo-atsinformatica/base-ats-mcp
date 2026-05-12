@@ -1,0 +1,57 @@
+name: Docker CI/CD
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_INDEXER: ${{ github.repository_owner }}/erp-kb-indexer
+  IMAGE_NAME_MCP: ${{ github.repository_owner }}/erp-kb-mcp-server
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Indexer
+        id: meta-indexer
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_INDEXER }}
+
+      - name: Build and push Indexer image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./indexer
+          push: true
+          tags: ${{ steps.meta-indexer.outputs.tags }}
+          labels: ${{ steps.meta-indexer.outputs.labels }}
+
+      - name: Extract metadata (tags, labels) for MCP Server
+        id: meta-mcp
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_MCP }}
+
+      - name: Build and push MCP Server image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mcp_server
+          push: true
+          tags: ${{ steps.meta-mcp.outputs.tags }}
+          labels: ${{ steps.meta-mcp.outputs.labels }}

@@ -1,0 +1,21 @@
+name: Sync Wiki to FalkorDB
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'wiki/**/*.md'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Indexer via MCP Server
+        run: |
+          curl -X POST "${{ secrets.MCP_SERVER_URL }}/sync" \
+            -H "X-Admin-Token: ${{ secrets.ADMIN_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            --fail \
+            --retry 3 \
+            --retry-delay 5

@@ -1,0 +1,24 @@
+[project]
+name = "erp-kb-mcp-server"
+version = "0.1.0"
+description = "MCP Server to expose FalkorDB knowledge base to AI agents"
+authors = [{ name = "ATS Informatica", email = "suporte@atsinformatica.com.br" }]
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "httpx>=0.26.0",
+    "falkordb>=0.1.1",
+    "google-genai>=1.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "opentelemetry-api>=1.21.0",
+    "opentelemetry-sdk>=1.21.0",
+    "opentelemetry-exporter-otlp>=1.21.0",
+    "structlog>=23.2.0",
+    "mcp>=1.0.0",
+]
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
