@@ -1,0 +1,73 @@
+name: Mirror to Azure DevOps
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  delete:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mirror-azure
+  cancel-in-progress: false
+
+env:
+  AZ_ORG: ats-informatica
+  AZ_PROJECT: Central
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure Azure DevOps repository exists
+        env:
+          AZ_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "${AZ_PAT}" ]; then
+            echo "::error::secret AZURE_DEVOPS_PAT nao configurado neste repositorio"
+            exit 1
+          fi
+          repo="${GITHUB_REPOSITORY##*/}"
+          auth=$(printf ':%s' "${AZ_PAT}" | base64 -w0)
+          base="https://dev.azure.com/${AZ_ORG}/${AZ_PROJECT}/_apis/git/repositories"
+
+          code=$(curl -sS -o /tmp/get.json -w '%{http_code}' \
+            -H "Authorization: Basic ${auth}" \
+            "${base}/${repo}?api-version=7.1")
+
+          if [ "${code}" = "200" ]; then
+            echo "repo '${repo}' ja existe no projeto ${AZ_PROJECT}"
+          elif [ "${code}" = "404" ]; then
+            echo "criando repo '${repo}' em ${AZ_PROJECT}"
+            ccode=$(curl -sS -o /tmp/post.json -w '%{http_code}' -X POST \
+              -H "Authorization: Basic ${auth}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"name\":\"${repo}\"}" \
+              "${base}?api-version=7.1")
+            if [ "${ccode}" != "201" ] && [ "${ccode}" != "200" ]; then
+              echo "::error::falha ao criar repo (HTTP ${ccode})"
+              sed -e 's/[A-Za-z0-9]\{40,\}/***/g' /tmp/post.json || true
+              exit 1
+            fi
+          else
+            echo "::error::resposta inesperada da API do Azure DevOps (HTTP ${code}) - PAT invalido, expirado ou sem escopo Code (Read & Write)?"
+            exit 1
+          fi
+
+      - name: Push to Azure DevOps
+        env:
+          AZ_PAT: ${{ secrets.AZURE_DEVOPS_PAT }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY##*/}"
+          git remote add azure "https://x-access-token:${AZ_PAT}@dev.azure.com/${AZ_ORG}/${AZ_PROJECT}/_git/${repo}"
+          git push azure --prune --all
+          git push azure --prune --tags
