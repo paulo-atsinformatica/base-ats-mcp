@@ -1,0 +1,261 @@
+{
+  "corpus": "E:/Projetos/obsidian/wiki",
+  "scope": "full",
+  "docs_indexaveis": 5138,
+  "consultas": 1200,
+  "timestamp": "2026-09-14T10:43:11",
+  "backends": {
+    "bm25-chunk": {
+      "tracks": {
+        "erro_literal": {
+          "n": 200,
+          "mrr@10": 0.8918,
+          "recall@1": 0.82,
+          "recall@3": 0.97,
+          "recall@5": 0.98,
+          "recall@10": 0.985
+        },
+        "fewshot_pergunta": {
+          "n": 200,
+          "mrr@10": 0.5141,
+          "recall@1": 0.415,
+          "recall@3": 0.58,
+          "recall@5": 0.645,
+          "recall@10": 0.715
+        },
+        "rotina_objetivo": {
+          "n": 200,
+          "mrr@10": 0.4822,
+          "recall@1": 0.375,
+          "recall@3": 0.555,
+          "recall@5": 0.64,
+          "recall@10": 0.725
+        },
+        "rotina_objetivo_hard": {
+          "n": 200,
+          "mrr@10": 0.5204,
+          "recall@1": 0.415,
+          "recall@3": 0.6,
+          "recall@5": 0.655,
+          "recall@10": 0.72
+        },
+        "sintoma": {
+          "n": 200,
+          "mrr@10": 0.4431,
+          "recall@1": 0.33,
+          "recall@3": 0.51,
+          "recall@5": 0.575,
+          "recall@10": 0.675
+        },
+        "sintoma_hard": {
+          "n": 200,
+          "mrr@10": 0.4546,
+          "recall@1": 0.39,
+          "recall@3": 0.51,
+          "recall@5": 0.55,
+          "recall@10": 0.605
+        }
+      },
+      "overall": {
+        "n": 1200,
+        "mrr@10": 0.551,
+        "recall@1": 0.4575,
+        "recall@3": 0.6208,
+        "recall@5": 0.6742,
+        "recall@10": 0.7375
+      },
+      "skipped_alvo_fora_do_indice": 0,
+      "vazamentos_analyst": 0,
+      "segundos": 4.0
+    },
+    "bm25-chunk-ctx": {
+      "tracks": {
+        "erro_literal": {
+          "n": 200,
+          "mrr@10": 0.9587,
+          "recall@1": 0.94,
+          "recall@3": 0.98,
+          "recall@5": 0.985,
+          "recall@10": 0.985
+        },
+        "fewshot_pergunta": {
+          "n": 200,
+          "mrr@10": 0.5304,
+          "recall@1": 0.435,
+          "recall@3": 0.585,
+          "recall@5": 0.655,
+          "recall@10": 0.735
+        },
+        "rotina_objetivo": {
+          "n": 200,
+          "mrr@10": 0.5479,
+          "recall@1": 0.445,
+          "recall@3": 0.62,
+          "recall@5": 0.685,
+          "recall@10": 0.765
+        },
+        "rotina_objetivo_hard": {
+          "n": 200,
+          "mrr@10": 0.5122,
+          "recall@1": 0.42,
+          "recall@3": 0.56,
+          "recall@5": 0.65,
+          "recall@10": 0.73
+        },
+        "sintoma": {
+          "n": 200,
+          "mrr@10": 0.4859,
+          "recall@1": 0.375,
+          "recall@3": 0.57,
+          "recall@5": 0.645,
+          "recall@10": 0.725
+        },
+        "sintoma_hard": {
+          "n": 200,
+          "mrr@10": 0.4187,
+          "recall@1": 0.345,
+          "recall@3": 0.48,
+          "recall@5": 0.51,
+          "recall@10": 0.57
+        }
+      },
+      "overall": {
+        "n": 1200,
+        "mrr@10": 0.5756,
+        "recall@1": 0.4933,
+        "recall@3": 0.6325,
+        "recall@5": 0.6883,
+        "recall@10": 0.7517
+      },
+      "skipped_alvo_fora_do_indice": 0,
+      "vazamentos_analyst": 0,
+      "segundos": 5.8
+    },
+    "bm25-doc": {
+      "tracks": {
+        "erro_literal": {
+          "n": 200,
+          "mrr@10": 0.8777,
+          "recall@1": 0.815,
+          "recall@3": 0.95,
+          "recall@5": 0.965,
+          "recall@10": 0.975
+        },
+        "fewshot_pergunta": {
+          "n": 200,
+          "mrr@10": 0.4716,
+          "recall@1": 0.355,
+          "recall@3": 0.565,
+          "recall@5": 0.605,
+          "recall@10": 0.705
+        },
+        "rotina_objetivo": {
+          "n": 200,
+          "mrr@10": 0.5032,
+          "recall@1": 0.39,
+          "recall@3": 0.585,
+          "recall@5": 0.675,
+          "recall@10": 0.725
+        },
+        "rotina_objetivo_hard": {
+          "n": 200,
+          "mrr@10": 0.5087,
+          "recall@1": 0.41,
+          "recall@3": 0.585,
+          "recall@5": 0.635,
+          "recall@10": 0.68
+        },
+        "sintoma": {
+          "n": 200,
+          "mrr@10": 0.4476,
+          "recall@1": 0.36,
+          "recall@3": 0.5,
+          "recall@5": 0.575,
+          "recall@10": 0.655
+        },
+        "sintoma_hard": {
+          "n": 200,
+          "mrr@10": 0.3857,
+          "recall@1": 0.315,
+          "recall@3": 0.425,
+          "recall@5": 0.485,
+          "recall@10": 0.55
+        }
+      },
+      "overall": {
+        "n": 1200,
+        "mrr@10": 0.5324,
+        "recall@1": 0.4408,
+        "recall@3": 0.6017,
+        "recall@5": 0.6567,
+        "recall@10": 0.715
+      },
+      "skipped_alvo_fora_do_indice": 0,
+      "vazamentos_analyst": 0,
+      "segundos": 3.1
+    },
+    "bm25-doc-ctx": {
+      "tracks": {
+        "erro_literal": {
+          "n": 200,
+          "mrr@10": 0.9351,
+          "recall@1": 0.9,
+          "recall@3": 0.97,
+          "recall@5": 0.975,
+          "recall@10": 0.985
+        },
+        "fewshot_pergunta": {
+          "n": 200,
+          "mrr@10": 0.501,
+          "recall@1": 0.39,
+          "recall@3": 0.58,
+          "recall@5": 0.635,
+          "recall@10": 0.715
+        },
+        "rotina_objetivo": {
+          "n": 200,
+          "mrr@10": 0.5124,
+          "recall@1": 0.405,
+          "recall@3": 0.58,
+          "recall@5": 0.67,
+          "recall@10": 0.735
+        },
+        "rotina_objetivo_hard": {
+          "n": 200,
+          "mrr@10": 0.4912,
+          "recall@1": 0.395,
+          "recall@3": 0.55,
+          "recall@5": 0.63,
+          "recall@10": 0.7
+        },
+        "sintoma": {
+          "n": 200,
+          "mrr@10": 0.473,
+          "recall@1": 0.375,
+          "recall@3": 0.535,
+          "recall@5": 0.61,
+          "recall@10": 0.695
+        },
+        "sintoma_hard": {
+          "n": 200,
+          "mrr@10": 0.356,
+          "recall@1": 0.27,
+          "recall@3": 0.42,
+          "recall@5": 0.48,
+          "recall@10": 0.525
+        }
+      },
+      "overall": {
+        "n": 1200,
+        "mrr@10": 0.5448,
+        "recall@1": 0.4558,
+        "recall@3": 0.6058,
+        "recall@5": 0.6667,
+        "recall@10": 0.7258
+      },
+      "skipped_alvo_fora_do_indice": 0,
+      "vazamentos_analyst": 0,
+      "segundos": 3.3
+    }
+  }
+}

@@ -9,3 +9,11 @@ repo/
 data/
 *.log
 .DS_Store
+
+# Golden set do eval: NAO versionar neste repositorio, que e PUBLICO.
+# As consultas sao extraidas literalmente das paginas da wiki e 36% delas
+# vem de paginas `audience: analyst` (erro de FireDAC, violacao de chave,
+# nome de indice e de tabela). O arquivo e derivado e deterministico -
+# regenere com `python eval/build_goldenset.py` a partir da wiki privada.
+eval/goldenset.jsonl
+eval/goldenset_paraphrased.jsonl

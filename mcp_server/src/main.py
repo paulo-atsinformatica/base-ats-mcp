@@ -109,7 +109,9 @@ async def handle_call_tool(
     if not arguments:
         arguments = {}
     if auth is None:
-        auth = AuthContext(token="", scope="full")
+        # Sem identidade, fecha o acesso em vez de abrir: chamada por um
+        # transporte que nao injeta auth nao pode enxergar audience=analyst.
+        auth = AuthContext(token="", scope="non_analyst")
     try:
         if name == "search_knowledge":
             result = await search_knowledge(
@@ -122,7 +124,11 @@ async def handle_call_tool(
             result = await get_document(arguments.get("doc_id"), include_analyst=auth.include_analyst)
             return [types.TextContent(type="text", text=str(result))]
         if name == "graph_neighbors":
-            result = await graph_neighbors(arguments.get("entity_name"), arguments.get("depth", 1))
+            result = await graph_neighbors(
+                arguments.get("entity_name"),
+                arguments.get("depth", 1),
+                include_analyst=auth.include_analyst,
+            )
             return [types.TextContent(type="text", text=str(result))]
         raise ValueError(f"Ferramenta desconhecida: {name}")
     except Exception as e:
@@ -193,13 +199,20 @@ async def health_check():
 
 
 @app.post("/api/admin/sync", tags=["admin"], dependencies=[Depends(get_full_access)])
-async def trigger_sync():
-    """Aciona re-indexacao no Indexer Service (git pull + sync)."""
+async def trigger_sync(force: bool = False, path: str = ""):
+    """Aciona re-indexacao no Indexer Service (git pull + sync).
+
+    force=true varre a base inteira ignorando o ponteiro de commit.
+    path=rotinas/x.md reindexa so aquele documento.
+    """
     indexer_internal_url = "http://indexer:9000"
-    logger.info("manual_sync_triggered")
+    logger.info("manual_sync_triggered", force=force, path=path)
     try:
         async with httpx.AsyncClient(timeout=300.0) as client:
-            response = await client.post(f"{indexer_internal_url}/trigger")
+            response = await client.post(
+                f"{indexer_internal_url}/trigger",
+                params={"force": str(force).lower(), "path": path},
+            )
             response.raise_for_status()
             return response.json()
     except httpx.RequestError as e:

@@ -1,0 +1,72 @@
+{
+  "corpus": "E:/Projetos/obsidian/wiki",
+  "scope": "full",
+  "docs_indexaveis": 5138,
+  "consultas": 300,
+  "timestamp": "2026-09-14T16:11:09",
+  "backends": {
+    "api": {
+      "tracks": {
+        "erro_literal": {
+          "n": 50,
+          "mrr@10": 0.8467,
+          "recall@1": 0.8,
+          "recall@3": 0.9,
+          "recall@5": 0.9,
+          "recall@10": 0.9
+        },
+        "fewshot_pergunta": {
+          "n": 50,
+          "mrr@10": 0.845,
+          "recall@1": 0.78,
+          "recall@3": 0.9,
+          "recall@5": 0.92,
+          "recall@10": 0.92
+        },
+        "rotina_objetivo": {
+          "n": 50,
+          "mrr@10": 0.57,
+          "recall@1": 0.46,
+          "recall@3": 0.66,
+          "recall@5": 0.74,
+          "recall@10": 0.8
+        },
+        "rotina_objetivo_hard": {
+          "n": 50,
+          "mrr@10": 0.3529,
+          "recall@1": 0.28,
+          "recall@3": 0.36,
+          "recall@5": 0.44,
+          "recall@10": 0.54
+        },
+        "sintoma": {
+          "n": 50,
+          "mrr@10": 0.5325,
+          "recall@1": 0.44,
+          "recall@3": 0.6,
+          "recall@5": 0.66,
+          "recall@10": 0.72
+        },
+        "sintoma_hard": {
+          "n": 50,
+          "mrr@10": 0.4557,
+          "recall@1": 0.34,
+          "recall@3": 0.56,
+          "recall@5": 0.6,
+          "recall@10": 0.66
+        }
+      },
+      "overall": {
+        "n": 300,
+        "mrr@10": 0.6005,
+        "recall@1": 0.5167,
+        "recall@3": 0.6633,
+        "recall@5": 0.71,
+        "recall@10": 0.7567
+      },
+      "skipped_alvo_fora_do_indice": 0,
+      "vazamentos_analyst": 0,
+      "segundos": 238.3
+    }
+  }
+}

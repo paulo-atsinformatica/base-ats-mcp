@@ -4,6 +4,7 @@ import math
 from .config import settings
 from .telemetry import tracer
 from .logger import logger
+from .text_normalize import normalize
 
 
 def _vecf32_literal(values: list) -> str:
@@ -23,6 +24,10 @@ class FalkorDBRepository:
         self._ensure_indexes()
 
     def _ensure_indexes(self):
+        self._ensure_vector_index()
+        self._ensure_fulltext_index()
+
+    def _ensure_vector_index(self):
         strategies = [
             "CREATE VECTOR INDEX FOR (c:Chunk) ON (c.embedding) "
             "OPTIONS {dimension: 3072, similarityFunction: 'cosine'}",
@@ -40,6 +45,23 @@ class FalkorDBRepository:
                     return
                 logger.debug("vector_index_syntax_failed", error=err)
         logger.warning("vector_index_not_created", reason="no supported syntax found; scans will be used")
+
+    def _ensure_fulltext_index(self):
+        """Indice lexical, metade da busca hibrida.
+
+        A base e cheia de identificador exato — codigo de rejeicao, nome de
+        tabela, mensagem de erro, numero de versao — em que a busca vetorial
+        e fraca e a lexical acerta quase sempre.
+        """
+        try:
+            self.graph.query("CALL db.idx.fulltext.createNodeIndex('Chunk', 'search_text')")
+            logger.info("fulltext_index_ensured")
+        except Exception as e:
+            err = str(e)
+            if "already indexed" in err or "already exists" in err:
+                logger.debug("fulltext_index_exists")
+            else:
+                logger.warning("fulltext_index_not_created", error=err)
 
     def save_document(self, doc_data: dict, chunks: list, embeddings: list):
         with tracer.start_as_current_span("falkordb_save_document"):
@@ -67,6 +89,7 @@ class FalkorDBRepository:
                     id: $chunk_id,
                     heading: $heading,
                     content: $content,
+                    search_text: $search_text,
                     position: $pos,
                     embedding: __EMBEDDING__
                 })
@@ -79,6 +102,10 @@ class FalkorDBRepository:
                         "chunk_id": chunk_id,
                         "heading": chunk["heading"],
                         "content": chunk["content"],
+                        # Texto da busca lexical: mesmo conteudo contextualizado
+                        # que vai para o vetor, normalizado. `content` segue cru,
+                        # que e o que o LLM le.
+                        "search_text": normalize(chunk.get("embedding_text", chunk["content"])),
                         "pos": i,
                     },
                 )
@@ -161,6 +188,19 @@ class FalkorDBRepository:
         query = "MATCH (d:Document) RETURN d.path"
         res = self.graph.query(query)
         return [row[0] for row in res.result_set] if res.result_set else []
+
+    def get_meta(self, key: str):
+        """Estado do proprio indexador: ultimo commit indexado, versao do schema."""
+        res = self.graph.query("MATCH (m:Meta {key: $key}) RETURN m.value", {"key": key})
+        if res.result_set:
+            return res.result_set[0][0]
+        return None
+
+    def set_meta(self, key: str, value: str):
+        self.graph.query(
+            "MERGE (m:Meta {key: $key}) SET m.value = $value",
+            {"key": key, "value": value},
+        )
 
 
 repo = FalkorDBRepository()
