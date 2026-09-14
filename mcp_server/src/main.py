@@ -4,7 +4,6 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Security, Request, Depends
 from fastapi.security import APIKeyHeader
-from mcp.server import Server
 import mcp.types as types
 from pydantic import BaseModel
 
@@ -56,10 +55,14 @@ async def get_full_access(auth: AuthContext = Depends(get_api_key)):
     return auth
 
 
-mcp_server = Server("erp-kb-graphrag")
-
-
-@mcp_server.list_tools()
+# As duas funcoes abaixo NAO sao registradas num Server do SDK: quem despacha
+# JSON-RPC aqui e o endpoint POST /mcp, que as chama direto. O registro existia
+# (`@Server.list_tools()` / `@Server.call_tool()`) mas nunca era usado - nada
+# chamava `Server.run()`. Era acoplamento morto, e foi o que derrubou a
+# producao quando o SDK 2.x removeu esses decorators. O transporte e proprio
+# porque cada requisicao precisa carregar o escopo do token (`AuthContext`),
+# que decide se documento `audience: analyst` pode ser recuperado - e isso o
+# transporte do SDK nao injeta.
 async def handle_list_tools() -> list[types.Tool]:
     return [
         types.Tool(
@@ -100,7 +103,6 @@ async def handle_list_tools() -> list[types.Tool]:
     ]
 
 
-@mcp_server.call_tool()
 async def handle_call_tool(
     name: str,
     arguments: dict | None,
