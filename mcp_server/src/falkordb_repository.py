@@ -26,7 +26,8 @@ class FalkorDBRepository:
 
     def hybrid_search(self, query_vector: list, query_text: str, limit: int = 5,
                       include_analyst: bool = True, rrf_k: int = 60,
-                      peso_denso: float = 1.0, peso_lexical: float = 1.0):
+                      peso_denso: float = 1.0, peso_lexical: float = 1.0,
+                      modulo: str = "", tipos: list | None = None):
         """Funde busca vetorial e lexical por Reciprocal Rank Fusion.
 
         As duas metades da base pedem mecanismos diferentes, e foi medido em
@@ -43,12 +44,20 @@ class FalkorDBRepository:
             # Buscar fundo em cada lista: um documento que aparece em 6o lugar
             # numa e ausente na outra ainda pode vencer depois da fusao.
             fundo = max(limit * 4, 20)
-            densa = self.vector_search(query_vector, fundo, include_analyst)
-            lexical = self.keyword_search(query_text, fundo, include_analyst)
+            # Com recorte, o indice vetorial devolve os vizinhos ANTES do
+            # filtro, entao pedir 20 num modulo que e 6% do acervo costuma
+            # devolver nenhum. Buscar bem mais fundo e o preco de filtrar.
+            if modulo or tipos:
+                fundo = max(fundo, 400)
+            densa = self.vector_search(query_vector, fundo, include_analyst,
+                                       modulo=modulo, tipos=tipos)
+            lexical = self.keyword_search(query_text, fundo, include_analyst,
+                                          modulo=modulo, tipos=tipos)
             return rrf_fuse([densa, lexical], limit, rrf_k,
                             pesos=[peso_denso, peso_lexical])
 
-    def keyword_search(self, query_text: str, limit: int = 5, include_analyst: bool = True):
+    def keyword_search(self, query_text: str, limit: int = 5, include_analyst: bool = True,
+                       modulo: str = "", tipos: list | None = None):
         """Busca lexical no indice full-text, sobre Chunk.search_text."""
         with tracer.start_as_current_span("falkordb_keyword_search"):
             termos = to_fulltext_query(query_text)
@@ -58,7 +67,8 @@ class FalkorDBRepository:
             try:
                 res = self.graph.query(
                     query,
-                    {"termos": termos, "include_analyst": include_analyst, "limit": limit},
+                    {"termos": termos, "include_analyst": include_analyst,
+                     "limit": limit, "modulo": modulo or "", "tipos": tipos or []},
                 )
                 return res.result_set or []
             except Exception as e:
@@ -67,25 +77,41 @@ class FalkorDBRepository:
                 logger.warning("keyword_search_failed", error=str(e)[:200])
                 return []
 
-    def vector_search(self, query_vector: list, limit: int = 5, include_analyst: bool = True):
+    def vector_search(self, query_vector: list, limit: int = 5, include_analyst: bool = True,
+                      modulo: str = "", tipos: list | None = None):
         with tracer.start_as_current_span("falkordb_vector_search"):
             query_vec = _vecf32_literal(query_vector)
             query = VECTOR_SEARCH.replace("__QUERY_VECTOR__", query_vec)
             try:
-                res = self.graph.query(query, {"limit": limit, "include_analyst": include_analyst})
+                res = self.graph.query(query, {
+                    "limit": limit, "include_analyst": include_analyst,
+                    "modulo": modulo or "", "tipos": tipos or [],
+                })
                 return res.result_set
             except Exception as e:
                 logger.warning("vector_search_failed_falling_back_to_scan", error=str(e))
-                return self._vector_search_scan(query_vector, limit, include_analyst)
+                return self._vector_search_scan(query_vector, limit, include_analyst,
+                                                modulo=modulo, tipos=tipos)
 
-    def _vector_search_scan(self, query_vector: list, limit: int = 5, include_analyst: bool = True):
-        """Semantic fallback: cosine similarity over stored embeddings."""
+    def _vector_search_scan(self, query_vector: list, limit: int = 5, include_analyst: bool = True,
+                            modulo: str = "", tipos: list | None = None):
+        """Semantic fallback: cosine similarity over stored embeddings.
+
+        O recorte por modulo/tipo tem de valer aqui tambem. Ignorar o filtro no
+        fallback seria pior do que falhar: quem chamou acreditaria estar vendo
+        so o modulo pedido e receberia a base inteira, sem aviso.
+        """
         res = self.graph.query(
             "MATCH (c:Chunk)<-[:HAS_CHUNK]-(d:Document) "
             "WHERE c.embedding IS NOT NULL "
             "AND ($include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst') "
+            "AND (size($tipos) = 0 OR d.type IN $tipos) "
+            "OPTIONAL MATCH (d)-[:BELONGS_TO_MODULE]->(mod:Module) "
+            "WITH d, c, collect(mod.slug) AS modulos "
+            "WHERE $modulo = '' OR $modulo IN modulos "
             "RETURN d.id, d.title, d.path, c.heading, c.content, c.embedding",
-            {"include_analyst": include_analyst},
+            {"include_analyst": include_analyst, "modulo": modulo or "",
+             "tipos": tipos or []},
         )
         results = []
         qnorm = math.sqrt(sum(x * x for x in query_vector)) or 1.0

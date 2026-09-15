@@ -59,29 +59,48 @@ def _literal(valor):
         return "true" if valor else "false"
     if isinstance(valor, (int, float)):
         return str(valor)
+    # Lista precisa virar lista de verdade no Cypher: passar como string faz o
+    # FalkorDB reclamar "expected List or Null but was String" dentro do size().
+    if isinstance(valor, (list, tuple)):
+        return "[" + ", ".join(_literal(v) for v in valor) + "]"
     return "'" + str(valor).replace("'", "\\'") + "'"
 
 
 def semear(g):
     g.query("MATCH (n) DETACH DELETE n")
     docs = [
-        # (id, titulo, audience, heading, conteudo)
+        # (id, titulo, audience, tipo, modulo, heading, conteudo)
         ("ERR-cidades3", "Erro: A component named CIDADES3 already exists", "analyst",
+         "erro", "dba",
          "Solucao", "Acesse o banco e localize em Indices o indice CIDADES3."),
         ("TS-varios-pedidos", "Access violation na selecao de pedidos", "analyst",
+         "troubleshooting", "windows/pedidos",
          "Causa", "A rotina verifica registro da filial na tabela PARAMDAV."),
         ("ROT-troca", "Abatimento do Financeiro na Troca", "all",
+         "rotina", "windows/caixa",
          "Visao Geral", "O valor da devolucao feita na troca e descontado do contas a receber."),
         ("FAQ-nfce", "NFC-e rejeicao 491 tpEvento invalido", "all",
+         "faq", "windows/nfce",
          "Solucao", "Verifique o tipo de evento enviado para a Sefaz na NFC-e."),
+        # Mesmo assunto ("troca"), outro modulo: e o par que prova que o
+        # recorte separa a pagina certa de uma parecida de outro lugar.
+        ("ROT-troca-nfce", "Troca de produto no Checkout NFC-e", "all",
+         "rotina", "windows/nfce",
+         "Visao Geral", "A troca no Checkout devolve o valor no proprio cupom."),
     ]
-    for doc_id, titulo, audience, heading, conteudo in docs:
+    for doc_id, titulo, audience, tipo, modulo, heading, conteudo in docs:
         g.query(
-            "CREATE (d:Document {id:%s, title:%s, path:%s, audience:%s})"
+            "CREATE (d:Document {id:%s, title:%s, path:%s, audience:%s, type:%s})"
             "-[:HAS_CHUNK]->(:Chunk {heading:%s, content:%s, search_text:%s})"
             % (_literal(doc_id), _literal(titulo), _literal(doc_id + ".md"),
-               _literal(audience), _literal(heading), _literal(conteudo),
+               _literal(audience), _literal(tipo), _literal(heading),
+               _literal(conteudo),
                _literal(normalize(titulo + " " + heading + " " + conteudo)))
+        )
+        g.query(
+            "MATCH (d:Document {id:%s}) MERGE (m:Module {slug:%s}) "
+            "MERGE (d)-[:BELONGS_TO_MODULE]->(m)"
+            % (_literal(doc_id), _literal(modulo))
         )
     try:
         g.query("CALL db.idx.fulltext.createNodeIndex('Chunk', 'search_text')")
@@ -90,12 +109,13 @@ def semear(g):
             raise
 
 
-def buscar(g, texto, include_analyst=True, limit=10):
+def buscar(g, texto, include_analyst=True, limit=10, modulo="", tipos=None):
     termos = to_fulltext_query(texto)
     if not termos:
         return []
     res = g.query(KEYWORD_SEARCH, {
         "termos": termos, "include_analyst": include_analyst, "limit": limit,
+        "modulo": modulo, "tipos": tipos or [],
     })
     return res[1] or []
 
@@ -141,8 +161,11 @@ def main():
 
     print("\nfiltro de audience:")
     ids = [linha[0] for linha in buscar(g, "CIDADES3 PARAMDAV troca", include_analyst=False)]
+    # Lista o que NAO pode aparecer, em vez do que pode: assim acrescentar
+    # documento publico a semeadura nao quebra o teste por engano.
+    RESTRITOS = ("ERR-cidades3", "TS-varios-pedidos")
     check("escopo publico nao devolve documento analyst",
-          all(i in ("ROT-troca", "FAQ-nfce") for i in ids), str(ids))
+          not any(i in RESTRITOS for i in ids), str(ids))
     check("escopo publico ainda devolve o que e publico", "ROT-troca" in ids, str(ids))
     ids = [linha[0] for linha in buscar(g, "CIDADES3 PARAMDAV troca", include_analyst=True)]
     check("escopo interno devolve os restritos", "ERR-cidades3" in ids, str(ids))
@@ -156,6 +179,40 @@ def main():
     check("score devolvido e o do RRF",
           all(0 < linha[5] < 1 for linha in rrf_fuse([densa, lexical], 3)))
     check("lista vazia nao quebra", rrf_fuse([[], []], 5) == [])
+
+    print("\nrecorte por modulo e tipo (Cypher real):")
+    # "troca" existe em windows/caixa e em windows/nfce. Sem recorte vem tudo;
+    # com recorte vem so o modulo pedido - e essa e a triagem do suporte.
+    ids = [l[0] for l in buscar(g, "troca")]
+    check("sem recorte, troca aparece nos dois modulos",
+          {"ROT-troca", "ROT-troca-nfce"} <= set(ids), str(ids))
+
+    ids = [l[0] for l in buscar(g, "troca", modulo="windows/nfce")]
+    check("recorte por modulo isola a pagina certa",
+          ids == ["ROT-troca-nfce"], str(ids))
+
+    ids = [l[0] for l in buscar(g, "troca", modulo="windows/caixa")]
+    check("outro modulo devolve a outra pagina", ids == ["ROT-troca"], str(ids))
+
+    ids = [l[0] for l in buscar(g, "pedidos troca", tipos=["rotina"])]
+    check("recorte por tipo deixa so rotina",
+          all(i.startswith("ROT-") for i in ids) and ids, str(ids))
+
+    ids = [l[0] for l in buscar(g, "pedidos troca", tipos=["troubleshooting", "erro"])]
+    check("tipo de defeito nao devolve rotina",
+          all(not i.startswith("ROT-") for i in ids), str(ids))
+
+    ids = [l[0] for l in buscar(g, "troca", modulo="windows/nfce", tipos=["faq"])]
+    check("modulo e tipo combinam (e podem nao casar nada)", ids == [], str(ids))
+
+    ids = [l[0] for l in buscar(g, "troca", modulo="modulo/inexistente")]
+    check("modulo inexistente devolve vazio, nao a base inteira",
+          ids == [], str(ids))
+
+    # O recorte nao pode abrir brecha no filtro de audiencia.
+    ids = [l[0] for l in buscar(g, "CIDADES3", modulo="dba", include_analyst=False)]
+    check("recorte nao vaza documento analyst para escopo publico",
+          ids == [], str(ids))
 
     print("\ncalibracao da fusao:")
     # Medido em 2026-09-14 sobre 600 consultas: com rrf_k=60 a hibrida manteve

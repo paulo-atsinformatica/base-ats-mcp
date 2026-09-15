@@ -4,7 +4,8 @@ from ..telemetry import tracer
 
 async def search_knowledge(query: str, limit: int = 5, include_analyst: bool = True,
                            rrf_k: int = 60, peso_denso: float = 1.0,
-                           peso_lexical: float = 1.0):
+                           peso_lexical: float = 1.0, modulo: str = "",
+                           tipos: list | None = None):
     with tracer.start_as_current_span("tool_search_knowledge"):
         # 1. Generate query embedding
         query_vector = embedding_generator.generate(query)
@@ -17,6 +18,7 @@ async def search_knowledge(query: str, limit: int = 5, include_analyst: bool = T
         results = repo.hybrid_search(
             query_vector, query, limit, include_analyst=include_analyst,
             rrf_k=rrf_k, peso_denso=peso_denso, peso_lexical=peso_lexical,
+            modulo=modulo, tipos=tipos,
         )
 
         formatted = []

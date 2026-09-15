@@ -6,12 +6,38 @@ sintaxe destas consultas so se verifica no banco: um erro de digitacao em
 Cypher nao aparece em revisao de codigo nem em import.
 """
 
+# Recorte opcional por modulo e por tipo de pagina. Vai no WHERE das duas
+# buscas: `$modulo` vazio ou `$tipos` vazio desliga aquele filtro, entao a
+# consulta continua sendo uma so.
+#
+# Por que existe: 95% das paginas declaram modulo (84 modulos distintos) e o
+# `type` ja e propriedade do Document. Recortar por eles reduz o espaco de
+# 5.138 paginas para algumas centenas - `windows/caixa` sao 298 - e separa o
+# que e duvida de uso (rotina, procedimento, faq) do que e defeito acontecendo
+# (erro, troubleshooting), que e a triagem que o suporte humano faz primeiro.
+# O recorte por tipo e uma propriedade do Document e cabe no WHERE.
+_RECORTE_TIPO = """
+  AND (size($tipos) = 0 OR d.type IN $tipos)
+"""
+
+# Ja o recorte por modulo atravessa uma relacao, e esta versao do FalkorDB
+# recusa parametro dentro de padrao: tanto `EXISTS((d)-[:R]->(:M {slug: $m}))`
+# quanto a list comprehension equivalente falham com "Unable to resolve
+# filtered alias". Testado contra o banco, o unico caminho que passa e juntar
+# os slugs e comparar depois - por isso o OPTIONAL MATCH + collect.
+_RECORTE_MODULO = """
+OPTIONAL MATCH (d)-[:BELONGS_TO_MODULE]->(mod:Module)
+WITH d, node, score, collect(mod.slug) AS modulos
+WHERE $modulo = '' OR $modulo IN modulos
+"""
+
 # Busca lexical sobre o texto normalizado do chunk.
 KEYWORD_SEARCH = """
 CALL db.idx.fulltext.queryNodes('Chunk', $termos)
 YIELD node, score
 MATCH (node)<-[:HAS_CHUNK]-(d:Document)
-WHERE $include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst'
+WHERE ($include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst')
+""" + _RECORTE_TIPO + _RECORTE_MODULO + """
 RETURN d.id as doc_id, d.title as title, d.path as path,
        node.heading as heading, node.content as content, score
 LIMIT $limit
@@ -19,11 +45,17 @@ LIMIT $limit
 
 # Busca vetorial. __QUERY_VECTOR__ e substituido por um literal vecf32([...]),
 # porque o procedimento nao aceita vetor vindo de parametro.
+#
+# ATENCAO ao filtrar: o procedimento devolve os $limit chunks mais proximos
+# ANTES do WHERE, entao o recorte corta o que ja veio. Com um modulo que e 6%
+# do acervo, pedir 20 candidatos costuma devolver zero do modulo - por isso
+# quem chama aumenta muito o $limit quando ha filtro (ver hybrid_search).
 VECTOR_SEARCH = """
 CALL db.idx.vector.queryNodes('Chunk', 'embedding', $limit, __QUERY_VECTOR__)
 YIELD node, score
 MATCH (node)<-[:HAS_CHUNK]-(d:Document)
-WHERE $include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst'
+WHERE ($include_analyst = true OR coalesce(d.audience, 'analyst') <> 'analyst')
+""" + _RECORTE_TIPO + _RECORTE_MODULO + """
 RETURN d.id as doc_id, d.title as title, d.path as path,
        node.heading as heading, node.content as content, score
 """

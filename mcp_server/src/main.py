@@ -186,11 +186,35 @@ class SearchRequest(BaseModel):
     rrf_k: Optional[int] = None
     peso_denso: Optional[float] = None
     peso_lexical: Optional[float] = None
+    # Recorte da busca. Diferente dos parametros de fusao acima, estes valem
+    # para QUALQUER token: sao o que permite ao agente de atendimento fazer a
+    # triagem do suporte - qual modulo, e se e duvida de uso ou defeito - e
+    # buscar so onde a resposta pode estar.
+    modulo: Optional[str] = None
+    tipos: Optional[list] = None
+
+
+# O que o `type` do Document aceita. Recusar o resto evita que um typo vire
+# busca silenciosamente vazia - o agente pediria "rotinas" e receberia nada.
+TIPOS_VALIDOS = {"rotina", "procedimento", "troubleshooting", "erro", "faq",
+                 "few-shot", "modulo", "output"}
 
 
 @app.post("/api/knowledge/search", tags=["knowledge"])
 async def api_search(req: SearchRequest, auth: AuthContext = Depends(get_api_key)):
     ajustes = {}
+    if req.modulo:
+        ajustes["modulo"] = str(req.modulo).strip().lower()
+    if req.tipos:
+        tipos = [str(t).strip().lower() for t in req.tipos]
+        invalidos = [t for t in tipos if t not in TIPOS_VALIDOS]
+        if invalidos:
+            raise HTTPException(
+                status_code=400,
+                detail="tipo desconhecido: %s. Validos: %s" % (
+                    ", ".join(invalidos), ", ".join(sorted(TIPOS_VALIDOS))),
+            )
+        ajustes["tipos"] = tipos
     if auth.scope == "full":
         if req.rrf_k is not None:
             ajustes["rrf_k"] = max(1, min(int(req.rrf_k), 1000))
