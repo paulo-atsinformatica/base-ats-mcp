@@ -157,6 +157,40 @@ def main():
           all(0 < linha[5] < 1 for linha in rrf_fuse([densa, lexical], 3)))
     check("lista vazia nao quebra", rrf_fuse([[], []], 5) == [])
 
+    print("\ncalibracao da fusao:")
+    # Medido em 2026-09-14 sobre 600 consultas: com rrf_k=60 a hibrida manteve
+    # R@10 mas derrubou R@1 de 0,517 (densa pura) para 0,338. A causa e
+    # mecanica, e e o que estes casos fixam.
+    def _l(doc):
+        return [doc, doc, "path/" + doc, "sec", "conteudo", 0.0]
+
+    # A: 1o na densa e ausente na lexical - o caso do sintoma parafraseado,
+    # em que a metade lexical nao tem sinal nenhum.
+    # B: 11o nas DUAS listas - co-ocorrencia sem relevancia.
+    d = [_l("A")] + [_l("x%d" % i) for i in range(1, 10)] + [_l("B")]
+    x = [_l("y%d" % i) for i in range(0, 10)] + [_l("B")]
+
+    topo60 = [l[0] for l in rrf_fuse([d, x], 3, rrf_k=60)]
+    check("k=60 deixa a co-ocorrencia vencer o melhor da densa",
+          topo60[0] == "B", str(topo60))
+    topo5 = [l[0] for l in rrf_fuse([d, x], 3, rrf_k=5)]
+    check("k baixo preserva o melhor da densa", topo5[0] == "A", str(topo5))
+    # Pesar a densa ajuda menos do que parece, e a algebra explica: A vale
+    # wd/61 e B vale (wd+wl)/71, entao so inverte quando wd > 6,1*wl - porque
+    # B tambem recebe o peso da densa. Baixar o k e muito mais eficaz.
+    topo_peso3 = [l[0] for l in rrf_fuse([d, x], 3, rrf_k=60, pesos=[3.0, 1.0])]
+    check("peso 3:1 na densa ainda nao basta com k=60",
+          topo_peso3[0] == "B", str(topo_peso3))
+    topo_peso7 = [l[0] for l in rrf_fuse([d, x], 3, rrf_k=60, pesos=[7.0, 1.0])]
+    check("peso 7:1 inverte (limite teorico 6,1:1)",
+          topo_peso7[0] == "A", str(topo_peso7))
+    topo_sem = [l[0] for l in rrf_fuse([d, x], 3, rrf_k=60, pesos=[1.0, 0.0])]
+    check("peso zero na lexical equivale a densa pura",
+          topo_sem[0] == "A", str(topo_sem))
+    padrao = [l[0] for l in rrf_fuse([d, x], 3)]
+    check("sem pesos informados, o comportamento nao muda",
+          padrao == topo60, str(padrao))
+
     print("\n%s" % ("todos os testes passaram" if falhas == 0 else "%d falha(s)" % falhas))
     return 1 if falhas else 0
 

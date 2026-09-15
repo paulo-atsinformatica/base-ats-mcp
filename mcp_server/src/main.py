@@ -180,11 +180,26 @@ async def get_mcp_tools():
 class SearchRequest(BaseModel):
     query: str
     limit: Optional[int] = 5
+    # Ajuste da fusao, para o harness de eval varrer configuracoes sem um
+    # deploy por valor. So o token de escopo completo pode informar: quem
+    # atende cliente nao escolhe como a busca e rankeada.
+    rrf_k: Optional[int] = None
+    peso_denso: Optional[float] = None
+    peso_lexical: Optional[float] = None
 
 
 @app.post("/api/knowledge/search", tags=["knowledge"])
 async def api_search(req: SearchRequest, auth: AuthContext = Depends(get_api_key)):
-    return {"result": await search_knowledge(req.query, req.limit, include_analyst=auth.include_analyst)}
+    ajustes = {}
+    if auth.scope == "full":
+        if req.rrf_k is not None:
+            ajustes["rrf_k"] = max(1, min(int(req.rrf_k), 1000))
+        if req.peso_denso is not None:
+            ajustes["peso_denso"] = max(0.0, min(float(req.peso_denso), 10.0))
+        if req.peso_lexical is not None:
+            ajustes["peso_lexical"] = max(0.0, min(float(req.peso_lexical), 10.0))
+    return {"result": await search_knowledge(
+        req.query, req.limit, include_analyst=auth.include_analyst, **ajustes)}
 
 
 @app.get("/api/knowledge/document/{doc_id}", tags=["knowledge"])

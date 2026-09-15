@@ -63,12 +63,18 @@ def build_index(docs, backend):
     return index
 
 
-def api_search(url, token, query, limit):
+def api_search(url, token, query, limit, ajustes=None):
     import httpx
+
+    corpo = {"query": query, "limit": limit}
+    # Ajuste da fusao. O servidor so aceita de token full - com token publico
+    # os campos sao ignorados e a busca cai no padrao, entao uma varredura de
+    # configuracao tem de ser feita com o ADMIN_TOKEN.
+    corpo.update(ajustes or {})
 
     response = httpx.post(
         url.rstrip("/") + "/api/knowledge/search",
-        json={"query": query, "limit": limit},
+        json=corpo,
         headers={"X-API-Key": token},
         timeout=60.0,
     )
@@ -157,7 +163,20 @@ def main():
     parser.add_argument("--api-token", default=os.getenv("ADMIN_TOKEN", ""))
     parser.add_argument("--limit-queries", type=int, default=0, help="0 = todas")
     parser.add_argument("--track", default="", help="avaliar so uma trilha")
+    # Varredura da fusao (backend api). Sem estes, o servidor usa o padrao.
+    parser.add_argument("--rrf-k", type=int, default=None,
+                        help="k do RRF: menor = mais peso ao topo de cada lista")
+    parser.add_argument("--peso-denso", type=float, default=None)
+    parser.add_argument("--peso-lexical", type=float, default=None)
     args = parser.parse_args()
+
+    ajustes = {}
+    if args.rrf_k is not None:
+        ajustes["rrf_k"] = args.rrf_k
+    if args.peso_denso is not None:
+        ajustes["peso_denso"] = args.peso_denso
+    if args.peso_lexical is not None:
+        ajustes["peso_lexical"] = args.peso_lexical
 
     todos = common.load_docs(Path(args.corpus))
     # O indexer pula draft; o eval tem de refletir isso.
@@ -189,6 +208,9 @@ def main():
         "docs_indexaveis": len(docs),
         "consultas": len(rows),
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        # Sem registrar a configuracao, dois relatorios viram numeros soltos
+        # que ninguem consegue comparar depois.
+        "ajustes_fusao": ajustes or None,
         "backends": {},
     }
 
@@ -201,8 +223,8 @@ def main():
             if not args.api_url or not args.api_token:
                 raise SystemExit("backend api exige --api-url e --api-token")
 
-            def retrieve(q, _u=args.api_url, _t=args.api_token):
-                return api_search(_u, _t, q, TOP_K)
+            def retrieve(q, _u=args.api_url, _t=args.api_token, _a=ajustes):
+                return api_search(_u, _t, q, TOP_K, _a)
         else:
             index = build_index(docs, backend)
 

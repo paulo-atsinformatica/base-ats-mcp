@@ -29,23 +29,41 @@ RETURN d.id as doc_id, d.title as title, d.path as path,
 """
 
 
-def rrf_fuse(listas: list, limit: int, rrf_k: int = 60) -> list:
+RRF_K_PADRAO = 60
+PESO_PADRAO = 1.0
+
+
+def rrf_fuse(listas: list, limit: int, rrf_k: int = RRF_K_PADRAO,
+             pesos: list | None = None) -> list:
     """Reciprocal Rank Fusion entre varias listas ordenadas de resultados.
 
     Cada linha e (doc_id, title, path, heading, content, score). A fusao usa
     so a POSICAO na lista, nunca o score bruto: cosseno em [0,1] e score do
     RediSearch nao sao comparaveis, e normalizar um no outro seria inventar
-    uma escala. Um chunk que aparece razoavelmente bem nas duas listas vence
-    um que aparece otimo em uma so — que e exatamente o comportamento
-    desejado entre busca densa e lexical.
+    uma escala.
+
+    `rrf_k` decide QUANTO a co-ocorrencia vale contra a relevancia isolada, e
+    nao e detalhe: com k=60, um chunk em 11o lugar nas DUAS listas (2/70) ganha
+    do 1o colocado da densa ausente na lexical (1/61). Isso e otimo quando as
+    duas metades tem sinal (mensagem de erro colada) e pessimo quando a lexical
+    e ruido (sintoma parafraseado, sem os termos do titulo). Medido em
+    2026-09-14 sobre 600 consultas: k=60 manteve R@10 mas derrubou R@1 de 0,517
+    para 0,338 contra a busca densa pura.
+
+    `pesos` multiplica a contribuicao de cada lista, na mesma ordem de
+    `listas` - serve para dar mais voz a densa sem desligar a lexical.
     """
+    if pesos is None:
+        pesos = [PESO_PADRAO] * len(listas)
+
     pontos: dict = {}
     linhas: dict = {}
-    for lista in listas:
+    for indice, lista in enumerate(listas):
+        peso = pesos[indice] if indice < len(pesos) else PESO_PADRAO
         for posicao, linha in enumerate(lista):
             # Chave por chunk: documento + secao.
             chave = (linha[0] or linha[2], linha[3])
-            pontos[chave] = pontos.get(chave, 0.0) + 1.0 / (rrf_k + posicao + 1)
+            pontos[chave] = pontos.get(chave, 0.0) + peso / (rrf_k + posicao + 1)
             linhas.setdefault(chave, linha)
 
     ordenado = sorted(pontos.items(), key=lambda kv: kv[1], reverse=True)

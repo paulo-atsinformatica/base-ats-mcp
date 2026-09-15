@@ -25,7 +25,8 @@ class FalkorDBRepository:
         self.graph = self.db.select_graph(settings.FALKORDB_GRAPH_NAME)
 
     def hybrid_search(self, query_vector: list, query_text: str, limit: int = 5,
-                      include_analyst: bool = True, rrf_k: int = 60):
+                      include_analyst: bool = True, rrf_k: int = 60,
+                      peso_denso: float = 1.0, peso_lexical: float = 1.0):
         """Funde busca vetorial e lexical por Reciprocal Rank Fusion.
 
         As duas metades da base pedem mecanismos diferentes, e foi medido em
@@ -44,7 +45,8 @@ class FalkorDBRepository:
             fundo = max(limit * 4, 20)
             densa = self.vector_search(query_vector, fundo, include_analyst)
             lexical = self.keyword_search(query_text, fundo, include_analyst)
-            return rrf_fuse([densa, lexical], limit, rrf_k)
+            return rrf_fuse([densa, lexical], limit, rrf_k,
+                            pesos=[peso_denso, peso_lexical])
 
     def keyword_search(self, query_text: str, limit: int = 5, include_analyst: bool = True):
         """Busca lexical no indice full-text, sobre Chunk.search_text."""
